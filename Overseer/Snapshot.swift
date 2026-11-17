@@ -5,6 +5,7 @@ import SwiftUI
 /// Debug-only: writes the app to PNGs, for PR screenshots where screen recording isn't available.
 ///
 /// - `OVERSEER_SNAPSHOT=/path/board.png` writes the main window, then quits.
+/// - With `OVERSEER_SNAPSHOT_UPDATE=/path/update.png` too, it writes the update window instead.
 /// - `OVERSEER_APPEARANCE=dark|light` picks the appearance.
 /// - `OVERSEER_SELECT=<column>` also writes the first ticket of that column's detail view to
 ///   `/path/board-ticket.png`. The inspector pane can't be captured from inside the process, so
@@ -15,6 +16,20 @@ enum Snapshot {
         guard let path = env["OVERSEER_SNAPSHOT"] else { return }
         if let appearance = env["OVERSEER_APPEARANCE"] {
             NSApp.appearance = NSAppearance(named: appearance == "dark" ? .darkAqua : .aqua)
+        }
+        if let updatePath = env["OVERSEER_SNAPSHOT_UPDATE"] {
+            Task { @MainActor in
+                let window = NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
+                window.contentViewController = NSHostingController(rootView: UpdateAvailableView(
+                    newVersion: "0.1.0 (12)", currentVersion: "0.1.0 (11)", canInstall: true,
+                    releaseNotes: URL(string: "https://github.com/ambiapps/overseer/releases")!, choose: { _ in })
+                    .background(Color(nsColor: .windowBackgroundColor)))
+                window.orderBack(nil)
+                try? await Task.sleep(for: .seconds(1))
+                write(window.contentView!, to: updatePath)
+                NSApp.terminate(nil)
+            }
+            return
         }
         Task { @MainActor in
             while store.lastRefresh == nil { try? await Task.sleep(for: .milliseconds(200)) }

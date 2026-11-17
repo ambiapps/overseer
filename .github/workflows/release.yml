@@ -1,0 +1,59 @@
+name: Release
+
+# Every push to main (every merged PR) tests, builds a DMG and publishes it as a GitHub release
+# tagged v<VERSION>(<run number>), e.g. v0.1.0(12). Installed apps update themselves from it.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    # The self-hosted Apple-silicon build Macs.
+    runs-on: [self-hosted, build, ARM64]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Select Xcode
+        id: xcode
+        uses: ambiapps/ci-infrastructure/.github/actions/ensure-latest-xcode@main
+
+      - name: Test
+        env:
+          DEVELOPER_DIR: ${{ steps.xcode.outputs.developer_dir }}
+        run: |
+          xcodebuild -project Overseer.xcodeproj -scheme Overseer -destination 'platform=macOS' \
+            -derivedDataPath build/TestData CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
+            test -quiet
+
+      - name: Build DMG
+        id: build
+        env:
+          DEVELOPER_DIR: ${{ steps.xcode.outputs.developer_dir }}
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: |
+          VERSION="$(tr -d '[:space:]' < VERSION)"
+          DMG="$(./scripts/build-dmg.sh | tail -n 1)"
+          {
+            echo "tag=v$VERSION($BUILD_NUMBER)"
+            echo "dmg=$DMG"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.build.outputs.tag }}
+          DMG: ${{ steps.build.outputs.dmg }}
+        run: |
+          gh release create "$TAG" "$DMG" \
+            --target "$GITHUB_SHA" \
+            --title "Overseer $TAG" \
+            --generate-notes

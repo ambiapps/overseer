@@ -1,6 +1,6 @@
 import Foundation
 
-enum GitHubError: LocalizedError {
+nonisolated enum GitHubError: LocalizedError {
     case noToken
     case http(Int, String)
     case graphQL(String)
@@ -18,7 +18,7 @@ enum GitHubError: LocalizedError {
 }
 
 /// Finds a GitHub token: a token saved in Settings wins, otherwise the `gh` CLI's token.
-enum TokenProvider {
+nonisolated enum TokenProvider {
     static let defaultsKey = "githubToken"
 
     static func token() -> String? {

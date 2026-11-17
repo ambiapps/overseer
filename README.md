@@ -8,13 +8,22 @@ Tickets are GitHub issues in `ambiapps`, tracked on the [Code board](https://git
 - The sidebar shows the board's columns (To Do, In Progress, In Review, Backlog, Done), all open issues, and each repository.
 - A ticket shows its linked PRs and their checks, its comments, and buttons to move it on the board, restart the agents, comment, edit, close or reopen.
 
-## Run
+## Install and updates
+
+Every merge to `main` runs `.github/workflows/release.yml` on the self-hosted build Macs (`[self-hosted, build, ARM64]`). It runs the tests, builds `Overseer-<version>-<build>.dmg` and publishes a GitHub release tagged `v<VERSION>(<run number>)`.
+
+Install the DMG from the [latest release](https://github.com/ambiapps/overseer/releases/latest) once. After that the app checks for a newer release at launch and hourly, offers it, and replaces and relaunches itself, as Orchard does. **Overseer → Check for Updates…** checks right away. The repository is private, so the app uses your GitHub token for this too.
+
+Bump `VERSION` for a new marketing version. The build number is the workflow's run number.
+
+## Run from source
 
 Open `Overseer.xcodeproj` in Xcode and run, or:
 
 ```sh
-xcodebuild -project Overseer.xcodeproj -scheme Overseer -derivedDataPath build build
-open build/Build/Products/Debug/Overseer.app
+./scripts/build-app.sh --install
 ```
+
+Local builds are build 0. They're only offered a release with a newer marketing version, and a Debug build from Xcode doesn't check for updates.
 
 It uses your `gh` CLI login (`gh auth login`; the token needs `project` scope), or a token pasted in Settings. Settings also hold the organization and board number.
