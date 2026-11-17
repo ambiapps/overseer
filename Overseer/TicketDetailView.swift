@@ -1,0 +1,357 @@
+import SwiftUI
+
+struct TicketDetailView: View {
+    @Environment(Store.self) private var store
+    @Environment(\.openURL) private var openURL
+    let ticket: Ticket
+
+    @State private var reply = ""
+    @State private var isEditing = false
+    @State private var editTitle = ""
+    @State private var editBody = ""
+    @State private var busy = false
+
+    private var status: TicketStatus { store.status(of: ticket) }
+    private var boardStatus: String? { ticket.boardItem(on: store.board)?.status }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                header
+                boardPanel
+                if !ticket.pullRequests.isEmpty { pullRequests }
+                Divider()
+                if isEditing { editor } else { MarkdownText(ticket.body.isEmpty ? "_No description._" : ticket.body) }
+                if !store.detailComments.isEmpty {
+                    Divider()
+                    comments
+                }
+                replyBox
+            }
+            .padding(24)
+            .frame(maxWidth: 820, alignment: .leading)
+            .frame(maxWidth: .infinity)
+        }
+        .navigationTitle(ticket.key)
+        .toolbar {
+            ToolbarItemGroup {
+                Button { openURL(ticket.url) } label: { Label("Open on GitHub", systemImage: "safari") }
+                    .help("Open on GitHub")
+                Button {
+                    editTitle = ticket.title
+                    editBody = ticket.body
+                    isEditing = true
+                } label: { Label("Edit", systemImage: "pencil") }
+                    .disabled(isEditing)
+                    .help("Edit ticket")
+            }
+        }
+    }
+
+    // MARK: Sections
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(ticket.title).font(.title2.weight(.semibold)).textSelection(.enabled)
+            HStack(spacing: 8) {
+                StatusBadge(status: status)
+                Text(ticket.repoNameWithOwner)
+                if let author = ticket.author { Text("· opened by \(author.login)") }
+                Text("· \(ticket.createdAt, format: .relative(presentation: .named))")
+            }
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            if !ticket.labels.isEmpty {
+                HStack {
+                    ForEach(ticket.labels) { label in
+                        Text(label.name)
+                            .font(.caption)
+                            .padding(.horizontal, 8).padding(.vertical, 2)
+                            .background(label.swiftUIColor.opacity(0.25), in: Capsule())
+                    }
+                }
+            }
+        }
+    }
+
+    private var boardPanel: some View {
+        GroupBox {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(headline).font(.headline)
+                    Text(detailText).font(.callout).foregroundStyle(.secondary)
+                }
+                Spacer()
+                if ticket.isOpen {
+                    if boardStatus == Store.todoStatus {
+                        Button("Restart Agents") { act { await store.restart(ticket) } }
+                            .help("Moves it to Backlog and back to To Do, which starts the agents again.")
+                    } else if status != .review {
+                        Button("Move to To Do") { act { await store.move(ticket, to: Store.todoStatus) } }
+                            .buttonStyle(.borderedProminent)
+                            .help("Agents pick up tickets you move into To Do on the board.")
+                    }
+                    statusMenu
+                    Button("Close") { act { await store.setOpen(ticket, open: false) } }
+                } else {
+                    Button("Reopen") { act { await store.setOpen(ticket, open: true) } }
+                }
+            }
+            .disabled(busy || store.board == nil)
+            .padding(6)
+        }
+    }
+
+    private var statusMenu: some View {
+        Menu {
+            ForEach(store.board?.options ?? []) { option in
+                Button {
+                    act { await store.move(ticket, to: option.name) }
+                } label: {
+                    if option.name == boardStatus { Label(option.name, systemImage: "checkmark") } else { Text(option.name) }
+                }
+            }
+        } label: {
+            Text(boardStatus ?? "Not on board")
+        }
+        .fixedSize()
+        .help("Board status")
+    }
+
+    private var headline: String {
+        switch status {
+        case .todo: "In To Do: handed to the agents"
+        case .inProgress: "In progress"
+        case .review: "PR open for review"
+        case .backlog: "In \(boardStatus ?? "Backlog")"
+        case .unfiled: "Not on the board"
+        case .done: "Done"
+        case .closed: "Closed"
+        }
+    }
+
+    private var detailText: String {
+        switch status {
+        case .todo: "The agents start when a ticket moves into To Do. If nothing happens, check that the Ambre agent's GitHub App can see \(ticket.repoName)."
+        case .review: "Comment on the PR to have the agent make changes."
+        case .backlog, .unfiled: "Move it to To Do when it's ready for an agent."
+        default: ""
+        }
+    }
+
+    private var pullRequests: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Pull Requests").font(.headline)
+            ForEach(ticket.pullRequests) { pr in
+                Button { openURL(pr.url) } label: {
+                    HStack {
+                        Image(systemName: pr.state == .merged ? "arrow.triangle.merge" : "arrow.triangle.pull")
+                            .foregroundStyle(pr.state == .merged ? .purple : pr.state == .open ? .green : .secondary)
+                        Text("#\(pr.number) \(pr.title)").lineLimit(1)
+                        if pr.isDraft { Text("Draft").font(.caption).foregroundStyle(.secondary) }
+                        Spacer()
+                        if let checks = pr.checks { ChecksBadge(checks: checks) }
+                        Text(pr.state.rawValue.capitalized).font(.caption).foregroundStyle(.secondary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private var editor: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            TextField("Title", text: $editTitle).textFieldStyle(.roundedBorder).font(.title3)
+            TextEditor(text: $editBody)
+                .font(.body.monospaced())
+                .frame(minHeight: 220)
+                .border(.separator)
+            HStack {
+                Spacer()
+                Button("Cancel") { isEditing = false }
+                Button("Save") {
+                    act {
+                        await store.edit(ticket, title: editTitle, body: editBody)
+                        isEditing = false
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(editTitle.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+    }
+
+    private var comments: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            ForEach(store.detailComments) { comment in
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text(comment.author?.login ?? "ghost").font(.callout.weight(.semibold))
+                        Text(comment.createdAt, format: .relative(presentation: .named))
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    MarkdownText(comment.body)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+            }
+        }
+    }
+
+    private var replyBox: some View {
+        VStack(alignment: .trailing, spacing: 8) {
+            TextEditor(text: $reply)
+                .font(.body)
+                .frame(minHeight: 70)
+                .scrollContentBackground(.hidden)
+                .padding(6)
+                .background(.background, in: RoundedRectangle(cornerRadius: 6))
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(.separator))
+                .overlay(alignment: .topLeading) {
+                    if reply.isEmpty {
+                        Text("Add a comment…").foregroundStyle(.tertiary).padding(11).allowsHitTesting(false)
+                    }
+                }
+            Button("Comment") {
+                let body = reply
+                act {
+                    await store.comment(on: ticket, body: body)
+                    reply = ""
+                }
+            }
+            .disabled(reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || busy)
+        }
+    }
+
+    private func act(_ work: @escaping () async -> Void) {
+        busy = true
+        Task {
+            await work()
+            busy = false
+        }
+    }
+}
+
+struct StatusBadge: View {
+    let status: TicketStatus
+
+    var body: some View {
+        Label(status.rawValue, systemImage: status.symbol)
+            .font(.caption.weight(.medium))
+            .foregroundStyle(status.tint)
+            .padding(.horizontal, 8).padding(.vertical, 3)
+            .background(status.tint.opacity(0.12), in: Capsule())
+    }
+}
+
+struct ChecksBadge: View {
+    let checks: LinkedPR.Checks
+
+    var body: some View {
+        switch checks {
+        case .success: Image(systemName: "checkmark.circle.fill").foregroundStyle(.green).help("Checks passed")
+        case .failure, .error: Image(systemName: "xmark.circle.fill").foregroundStyle(.red).help("Checks failed")
+        case .pending, .expected: Image(systemName: "circle.dotted").foregroundStyle(.orange).help("Checks running")
+        }
+    }
+}
+
+/// Lightweight Markdown: renders block structure line by line with inline styling.
+struct MarkdownText: View {
+    let source: String
+    init(_ source: String) { self.source = source }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+                switch block {
+                case .heading(let level, let text):
+                    inline(text).font(level <= 1 ? .title3.bold() : level == 2 ? .headline : .subheadline.bold())
+                        .padding(.top, 4)
+                case .code(let text):
+                    Text(text)
+                        .font(.callout.monospaced())
+                        .padding(8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
+                case .bullet(let indent, let marker, let text):
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(marker).foregroundStyle(.secondary)
+                        inline(text)
+                    }
+                    .padding(.leading, CGFloat(indent) * 14)
+                case .paragraph(let text):
+                    inline(text)
+                }
+            }
+        }
+        .textSelection(.enabled)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func inline(_ text: String) -> Text {
+        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        if let attributed = try? AttributedString(markdown: text, options: options) {
+            return Text(attributed)
+        }
+        return Text(text)
+    }
+
+    private enum Block {
+        case heading(Int, String)
+        case code(String)
+        case bullet(Int, String, String)
+        case paragraph(String)
+    }
+
+    private var blocks: [Block] {
+        var result: [Block] = []
+        var paragraph: [String] = []
+        var code: [String]?
+
+        func flush() {
+            if !paragraph.isEmpty { result.append(.paragraph(paragraph.joined(separator: "\n"))) }
+            paragraph = []
+        }
+
+        for raw in source.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n") {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("```") {
+                if let lines = code {
+                    result.append(.code(lines.joined(separator: "\n")))
+                    code = nil
+                } else {
+                    flush()
+                    code = []
+                }
+                continue
+            }
+            if code != nil { code?.append(raw); continue }
+            if line.isEmpty { flush(); continue }
+            if let hashes = line.firstIndex(where: { $0 != "#" }), line.hasPrefix("#"), line[hashes] == " " {
+                flush()
+                result.append(.heading(line.distance(from: line.startIndex, to: hashes), String(line[line.index(after: hashes)...])))
+                continue
+            }
+            let indent = raw.prefix { $0 == " " }.count / 2
+            if line.hasPrefix("- [ ] ") || line.hasPrefix("- [x] ") || line.hasPrefix("- [X] ") {
+                flush()
+                result.append(.bullet(indent, line.hasPrefix("- [ ]") ? "☐" : "☑", String(line.dropFirst(6))))
+            } else if line.hasPrefix("- ") || line.hasPrefix("* ") {
+                flush()
+                result.append(.bullet(indent, "•", String(line.dropFirst(2))))
+            } else if let dot = line.firstIndex(of: "."), line[..<dot].allSatisfy(\.isNumber), !line[..<dot].isEmpty,
+                      line[line.index(after: dot)...].hasPrefix(" ") {
+                flush()
+                result.append(.bullet(indent, String(line[...dot]), String(line[line.index(dot, offsetBy: 2)...])))
+            } else {
+                paragraph.append(line)
+            }
+        }
+        if let lines = code { result.append(.code(lines.joined(separator: "\n"))) }
+        flush()
+        return result
+    }
+}
