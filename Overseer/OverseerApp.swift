@@ -10,7 +10,12 @@ struct OverseerApp: App {
             ContentView(showingNewTicket: $showingNewTicket)
                 .environment(store)
                 .frame(minWidth: 960, minHeight: 560)
-                .task { store.start() }
+                .task {
+                    store.start()
+                    #if DEBUG
+                    Snapshot.runIfRequested(store: store)
+                    #endif
+                }
         }
         .commands {
             CommandGroup(replacing: .newItem) {

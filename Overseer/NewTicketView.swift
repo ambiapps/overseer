@@ -72,7 +72,7 @@ struct NewTicketView: View {
         .onAppear {
             details = Self.template
             if store.repo(named: lastRepo) != nil { repoName = lastRepo }
-            else if case .repo(let name)? = store.sidebar { repoName = name }
+            else if let name = store.repoFilter { repoName = name }
             titleFocused = true
         }
     }

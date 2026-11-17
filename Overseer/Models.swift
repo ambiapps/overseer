@@ -91,6 +91,13 @@ struct Ticket: Identifiable, Hashable, Sendable {
     }
 
     var key: String { "\(repoName)#\(number)" }
+
+    func with(boardItems: [BoardItem]) -> Ticket {
+        Ticket(id: id, number: number, title: title, body: body, url: url, isOpen: isOpen, stateReason: stateReason,
+               createdAt: createdAt, updatedAt: updatedAt, author: author, repoName: repoName,
+               repoNameWithOwner: repoNameWithOwner, labels: labels, assignees: assignees,
+               commentCount: commentCount, pullRequests: pullRequests, boardItems: boardItems)
+    }
 }
 
 /// Where a ticket is, from its board Status, linked PRs and issue state.
