@@ -2,48 +2,61 @@ import Foundation
 import Observation
 import SwiftUI
 
-enum SidebarItem: Hashable, Identifiable {
-    case todo
-    case inProgress
-    case review
-    case backlog
-    case done
-    case allOpen
-    case repo(String) // nameWithOwner
+/// A column on the board. Most are a board Status; In Review is derived from an open linked PR.
+enum BoardColumn: String, CaseIterable, Identifiable {
+    case backlog, todo, inProgress, review, done
 
-    var id: String {
-        switch self {
-        case .todo: "todo"
-        case .inProgress: "progress"
-        case .review: "review"
-        case .backlog: "backlog"
-        case .done: "done"
-        case .allOpen: "open"
-        case .repo(let name): "repo:\(name)"
-        }
-    }
+    var id: String { rawValue }
 
     var title: String {
         switch self {
+        case .backlog: "Backlog"
         case .todo: "To Do"
         case .inProgress: "In Progress"
         case .review: "In Review"
-        case .backlog: "Backlog"
         case .done: "Done"
-        case .allOpen: "All Open Issues"
-        case .repo(let name): name.components(separatedBy: "/").last ?? name
         }
     }
 
-    /// Board views come from the board; the rest are GitHub searches.
-    var boardStatuses: Set<TicketStatus>? {
+    var statuses: Set<TicketStatus> {
         switch self {
+        case .backlog: [.backlog, .unfiled]
         case .todo: [.todo]
         case .inProgress: [.inProgress]
         case .review: [.review]
-        case .backlog: [.backlog]
         case .done: [.done, .closed]
-        case .allOpen, .repo: nil
+        }
+    }
+
+    /// Representative status for the column's symbol and tint.
+    var status: TicketStatus {
+        switch self {
+        case .backlog: .backlog
+        case .todo: .todo
+        case .inProgress: .inProgress
+        case .review: .review
+        case .done: .done
+        }
+    }
+
+    /// The board Status a card dropped here gets. In Review follows the PR, so nothing drops there.
+    var dropStatus: String? {
+        switch self {
+        case .backlog: Store.backlogStatus
+        case .todo: Store.todoStatus
+        case .inProgress: "In Progress"
+        case .review: nil
+        case .done: "Done"
+        }
+    }
+
+    var hint: String {
+        switch self {
+        case .backlog: "Not ready for an agent yet."
+        case .todo: "Dropping a ticket here starts the agents."
+        case .inProgress: "Being worked on."
+        case .review: "An open PR is waiting. Comment on it to have the agent change it."
+        case .done: "Closed in the last \(Store.doneDays) days."
         }
     }
 }
@@ -53,12 +66,12 @@ enum SidebarItem: Hashable, Identifiable {
 final class Store {
     static let todoStatus = "To Do"
     static let backlogStatus = "Backlog"
+    static let doneDays = 14
 
     var repos: [Repo] = []
     var board: Board?
     var boardTickets: [Ticket] = []
-    var searchTickets: [Ticket] = []
-    var sidebar: SidebarItem? = .todo
+    var repoFilter: String? // nameWithOwner
     var selection: Ticket.ID?
     var searchText = ""
     var isLoading = false
@@ -88,34 +101,31 @@ final class Store {
         repos.first { $0.nameWithOwner == nameWithOwner }
     }
 
-    func count(_ item: SidebarItem) -> Int? {
-        guard let statuses = item.boardStatuses, item != .done else { return nil }
-        return boardTickets.filter { statuses.contains(status(of: $0)) }.count
+    /// Repositories that have tickets on the board, for the filter menu.
+    var boardRepos: [String] {
+        Set(boardTickets.map(\.repoNameWithOwner)).sorted()
     }
 
-    /// Tickets for the current sidebar item, filtered by the search text.
-    var visibleTickets: [Ticket] {
-        let item = sidebar ?? .todo
-        guard let statuses = item.boardStatuses else { return searchTickets }
+    private var filteredTickets: [Ticket] {
         let text = searchText.trimmingCharacters(in: .whitespaces).lowercased()
         return boardTickets.filter { ticket in
-            statuses.contains(status(of: ticket)) &&
+            (repoFilter == nil || ticket.repoNameWithOwner == repoFilter) &&
                 (text.isEmpty || ticket.title.lowercased().contains(text) || ticket.key.lowercased().contains(text))
         }
     }
 
-    var groupedTickets: [(TicketStatus, [Ticket])] {
-        let groups = Dictionary(grouping: visibleTickets, by: status(of:))
-        return TicketStatus.allCases.compactMap { status in
-            guard let items = groups[status], !items.isEmpty else { return nil }
-            return (status, items.sorted { $0.updatedAt > $1.updatedAt })
-        }
+    func tickets(in column: BoardColumn) -> [Ticket] {
+        let cutoff = Date.now.addingTimeInterval(-Double(Self.doneDays) * 86_400)
+        return filteredTickets
+            .filter { column.statuses.contains(status(of: $0)) }
+            .filter { column != .done || $0.updatedAt >= cutoff }
+            .sorted { $0.updatedAt > $1.updatedAt }
     }
 
     var selectedTicket: Ticket? {
         guard let selection else { return nil }
         if let detail, detail.id == selection { return detail }
-        return (boardTickets + searchTickets).first { $0.id == selection }
+        return boardTickets.first { $0.id == selection }
     }
 
     // MARK: Loading
@@ -153,27 +163,12 @@ final class Store {
             if board == nil { board = try await client.board(org: org, number: boardNumber) }
             if repos.isEmpty { repos = try await client.repos(org: org) }
             if let board { boardTickets = try await client.boardTickets(boardID: board.id) }
-            if let query = searchQuery() {
-                searchTickets = try await client.searchTickets(query)
-            }
             error = nil
             lastRefresh = .now
             if let selection, detail?.id == selection { await loadDetail(id: selection) }
         } catch {
             self.error = error.localizedDescription
         }
-    }
-
-    private func searchQuery() -> String? {
-        var parts: [String]
-        switch sidebar ?? .todo {
-        case .allOpen: parts = ["org:\(org)", "is:issue", "is:open", "sort:updated-desc"]
-        case .repo(let name): parts = ["repo:\(name)", "is:issue", "is:open", "sort:updated-desc"]
-        default: return nil
-        }
-        let text = searchText.trimmingCharacters(in: .whitespaces)
-        if !text.isEmpty { parts.append(text) }
-        return parts.joined(separator: " ")
     }
 
     func loadDetail(id: Ticket.ID) async {
@@ -183,7 +178,6 @@ final class Store {
             detail = ticket
             detailComments = comments
             if let i = boardTickets.firstIndex(where: { $0.id == id }) { boardTickets[i] = ticket }
-            if let i = searchTickets.firstIndex(where: { $0.id == id }) { searchTickets[i] = ticket }
         } catch {
             self.error = error.localizedDescription
         }
@@ -202,7 +196,6 @@ final class Store {
             if let option = board.option(named: status) {
                 try await client.setStatus(board: board, itemID: itemID, optionID: option.id)
             }
-            sidebar = status == Self.todoStatus ? .todo : .backlog
             await refresh()
             selection = created.nodeID
             notice = "Filed \(repo.name)#\(created.number) in \(status)."
@@ -215,6 +208,8 @@ final class Store {
 
     /// Moves a ticket to a board Status, adding it to the board first if needed.
     func move(_ ticket: Ticket, to statusName: String) async {
+        guard ticket.boardItem(on: board)?.status != statusName else { return }
+        setLocalStatus(ticket, statusName)
         await mutate(ticket) { client, board in
             let itemID = if let item = ticket.boardItem(on: board) {
                 item.id
@@ -226,12 +221,22 @@ final class Store {
             }
             try await client.setStatus(board: board, itemID: itemID, optionID: option.id)
         }
+        if statusName == Self.todoStatus { notice = "Moved \(ticket.key) to To Do. The agents start on it now." }
+    }
+
+    /// Handles a card dropped on a column.
+    func drop(ticketID: Ticket.ID, on column: BoardColumn) async {
+        guard let statusName = column.dropStatus,
+              let ticket = boardTickets.first(where: { $0.id == ticketID }) else { return }
+        await move(ticket, to: statusName)
     }
 
     /// The agents start on a Status change into To Do, so a ticket already there goes out and back.
     func restart(_ ticket: Ticket) async {
         await move(ticket, to: Self.backlogStatus)
-        await move(ticket, to: Self.todoStatus)
+        if let moved = boardTickets.first(where: { $0.id == ticket.id }) {
+            await move(moved, to: Self.todoStatus)
+        }
     }
 
     func setOpen(_ ticket: Ticket, open: Bool) async {
@@ -254,14 +259,23 @@ final class Store {
         }
     }
 
+    /// Shows a move on the board at once; the refresh after the write confirms or reverts it.
+    private func setLocalStatus(_ ticket: Ticket, _ statusName: String) {
+        guard let board, let i = boardTickets.firstIndex(where: { $0.id == ticket.id }) else { return }
+        let old = boardTickets[i]
+        var items = old.boardItems.filter { $0.projectID != board.id }
+        items.append(BoardItem(id: old.boardItem(on: board)?.id ?? "", projectID: board.id, status: statusName))
+        boardTickets[i] = old.with(boardItems: items)
+    }
+
     private func mutate(_ ticket: Ticket, _ work: @escaping (GitHubClient, Board) async throws -> Void) async {
         do {
             guard let board else { throw GitHubError.graphQL("The board hasn't loaded yet") }
             try await work(try authorizedClient(), board)
-            await refresh()
-            if selection == ticket.id { await loadDetail(id: ticket.id) }
         } catch {
             self.error = error.localizedDescription
         }
+        await refresh()
+        if selection == ticket.id { await loadDetail(id: ticket.id) }
     }
 }

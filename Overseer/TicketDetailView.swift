@@ -28,9 +28,8 @@ struct TicketDetailView: View {
                 }
                 replyBox
             }
-            .padding(24)
-            .frame(maxWidth: 820, alignment: .leading)
-            .frame(maxWidth: .infinity)
+            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .navigationTitle(ticket.key)
         .toolbar {
@@ -50,17 +49,20 @@ struct TicketDetailView: View {
 
     // MARK: Sections
 
+    private var meta: String {
+        var parts = [ticket.repoNameWithOwner]
+        if let author = ticket.author { parts.append("opened by \(author.login)") }
+        parts.append(ticket.createdAt.formatted(.relative(presentation: .named)))
+        return parts.joined(separator: " · ")
+    }
+
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(ticket.title).font(.title2.weight(.semibold)).textSelection(.enabled)
-            HStack(spacing: 8) {
-                StatusBadge(status: status)
-                Text(ticket.repoNameWithOwner)
-                if let author = ticket.author { Text("· opened by \(author.login)") }
-                Text("· \(ticket.createdAt, format: .relative(presentation: .named))")
-            }
-            .font(.callout)
-            .foregroundStyle(.secondary)
+            StatusBadge(status: status)
+            Text(meta)
+                .font(.callout)
+                .foregroundStyle(.secondary)
             if !ticket.labels.isEmpty {
                 HStack {
                     ForEach(ticket.labels) { label in
@@ -76,25 +78,33 @@ struct TicketDetailView: View {
 
     private var boardPanel: some View {
         GroupBox {
-            HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 10) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(headline).font(.headline)
-                    Text(detailText).font(.callout).foregroundStyle(.secondary)
-                }
-                Spacer()
-                if ticket.isOpen {
-                    if boardStatus == Store.todoStatus {
-                        Button("Restart Agents") { act { await store.restart(ticket) } }
-                            .help("Moves it to Backlog and back to To Do, which starts the agents again.")
-                    } else if status != .review {
-                        Button("Move to To Do") { act { await store.move(ticket, to: Store.todoStatus) } }
-                            .buttonStyle(.borderedProminent)
-                            .help("Agents pick up tickets you move into To Do on the board.")
+                    if !detailText.isEmpty {
+                        Text(detailText).font(.callout).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    statusMenu
-                    Button("Close") { act { await store.setOpen(ticket, open: false) } }
-                } else {
-                    Button("Reopen") { act { await store.setOpen(ticket, open: true) } }
+                }
+                HStack {
+                    if ticket.isOpen {
+                        if status == .review {
+                            // The PR is the next step; comments on it reach the agent.
+                        } else if boardStatus == Store.todoStatus {
+                            Button("Restart Agents") { act { await store.restart(ticket) } }
+                                .help("Moves it to Backlog and back to To Do, which starts the agents again.")
+                        } else if status != .review {
+                            Button("Move to To Do") { act { await store.move(ticket, to: Store.todoStatus) } }
+                                .buttonStyle(.borderedProminent)
+                                .help("Agents pick up tickets you move into To Do on the board.")
+                        }
+                        statusMenu
+                        Spacer()
+                        Button("Close") { act { await store.setOpen(ticket, open: false) } }
+                    } else {
+                        Spacer()
+                        Button("Reopen") { act { await store.setOpen(ticket, open: true) } }
+                    }
                 }
             }
             .disabled(busy || store.board == nil)
@@ -147,7 +157,7 @@ struct TicketDetailView: View {
                     HStack {
                         Image(systemName: pr.state == .merged ? "arrow.triangle.merge" : "arrow.triangle.pull")
                             .foregroundStyle(pr.state == .merged ? .purple : pr.state == .open ? .green : .secondary)
-                        Text("#\(pr.number) \(pr.title)").lineLimit(1)
+                        Text(verbatim: "#\(pr.number) \(pr.title)").lineLimit(1)
                         if pr.isDraft { Text("Draft").font(.caption).foregroundStyle(.secondary) }
                         Spacer()
                         if let checks = pr.checks { ChecksBadge(checks: checks) }
@@ -316,7 +326,10 @@ struct MarkdownText: View {
             paragraph = []
         }
 
-        for raw in source.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n") {
+        // HTML comments are invisible on GitHub (agents keep routing data in them), so drop them.
+        let visible = source.replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "<!--[\\s\\S]*?-->", with: "", options: .regularExpression)
+        for raw in visible.components(separatedBy: "\n") {
             let line = raw.trimmingCharacters(in: .whitespaces)
             if line.hasPrefix("```") {
                 if let lines = code {
