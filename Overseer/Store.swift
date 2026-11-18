@@ -299,6 +299,16 @@ final class Store {
         }
     }
 
+    /// Uploads a file for a ticket in `repo`, returning the URL to link from Markdown.
+    func upload(_ attachment: Attachment, repo: String) async throws -> URL {
+        try await authorizedClient().upload(attachment, repo: repo)
+    }
+
+    /// Fetches an image linked from a ticket, signed in.
+    func download(_ url: URL) async throws -> Data {
+        try await authorizedClient().download(url)
+    }
+
     /// Shows a move on the board at once; the refresh after the write confirms or reverts it.
     private func setLocalStatus(_ ticket: Ticket, _ statusName: String) {
         guard let board, let i = boardTickets.firstIndex(where: { $0.id == ticket.id }) else { return }

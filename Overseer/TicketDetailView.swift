@@ -31,6 +31,7 @@ struct TicketDetailView: View {
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .environment(\.imageFetcher) { [store] in try await store.download($0) }
         .navigationTitle(ticket.key)
         .toolbar {
             ToolbarItemGroup {
@@ -175,10 +176,8 @@ struct TicketDetailView: View {
     private var editor: some View {
         VStack(alignment: .leading, spacing: 8) {
             TextField("Title", text: $editTitle).textFieldStyle(.roundedBorder).font(.title3)
-            TextEditor(text: $editBody)
-                .font(.body.monospaced())
+            AttachmentEditor(text: $editBody, upload: upload, onError: { store.error = $0 })
                 .frame(minHeight: 220)
-                .border(.separator)
             HStack {
                 Spacer()
                 Button("Cancel") { isEditing = false }
@@ -189,7 +188,7 @@ struct TicketDetailView: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(editTitle.trimmingCharacters(in: .whitespaces).isEmpty)
+                .disabled(editTitle.trimmingCharacters(in: .whitespaces).isEmpty || Attachment.isUploading(editBody))
             }
         }
     }
@@ -214,18 +213,9 @@ struct TicketDetailView: View {
 
     private var replyBox: some View {
         VStack(alignment: .trailing, spacing: 8) {
-            TextEditor(text: $reply)
-                .font(.body)
+            AttachmentEditor(text: $reply, font: .systemFont(ofSize: NSFont.systemFontSize), placeholder: "Add a comment…",
+                             upload: upload, onError: { store.error = $0 })
                 .frame(minHeight: 70)
-                .scrollContentBackground(.hidden)
-                .padding(6)
-                .background(.background, in: RoundedRectangle(cornerRadius: 6))
-                .overlay(RoundedRectangle(cornerRadius: 6).stroke(.separator))
-                .overlay(alignment: .topLeading) {
-                    if reply.isEmpty {
-                        Text("Add a comment…").foregroundStyle(.tertiary).padding(11).allowsHitTesting(false)
-                    }
-                }
             Button("Comment") {
                 let body = reply
                 act {
@@ -233,8 +223,12 @@ struct TicketDetailView: View {
                     reply = ""
                 }
             }
-            .disabled(reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || busy)
+            .disabled(reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || busy || Attachment.isUploading(reply))
         }
+    }
+
+    private func upload(_ attachment: Attachment) async throws -> URL {
+        try await store.upload(attachment, repo: ticket.repoNameWithOwner)
     }
 
     private func act(_ work: @escaping () async -> Void) {
@@ -296,6 +290,8 @@ struct MarkdownText: View {
                     .padding(.leading, CGFloat(indent) * 14)
                 case .paragraph(let text):
                     inline(text)
+                case .image(let alt, let url):
+                    TicketImage(alt: alt, url: url)
                 }
             }
         }
@@ -316,6 +312,21 @@ struct MarkdownText: View {
         case code(String)
         case bullet(Int, String, String)
         case paragraph(String)
+        case image(String, URL)
+    }
+
+    /// A line that is only an image: `![alt](url)` or GitHub's `<img src="url">`.
+    private static func image(in line: String) -> (String, URL)? {
+        if let match = line.wholeMatch(of: /!\[([^\]]*)\]\((\S+?)(?:\s+"[^"]*")?\)/),
+           let url = URL(string: String(match.2)), url.scheme?.hasPrefix("http") == true {
+            return (String(match.1), url)
+        }
+        if let match = line.wholeMatch(of: /<img\b[^>]*\bsrc="([^"]+)"[^>]*\/?>/),
+           let url = URL(string: String(match.1)), url.scheme?.hasPrefix("http") == true {
+            let alt = line.firstMatch(of: /\balt="([^"]*)"/).map { String($0.1) } ?? ""
+            return (alt, url)
+        }
+        return nil
     }
 
     private var blocks: [Block] {
@@ -348,6 +359,11 @@ struct MarkdownText: View {
             if let hashes = line.firstIndex(where: { $0 != "#" }), line.hasPrefix("#"), line[hashes] == " " {
                 flush()
                 result.append(.heading(line.distance(from: line.startIndex, to: hashes), String(line[line.index(after: hashes)...])))
+                continue
+            }
+            if let (alt, url) = Self.image(in: line) {
+                flush()
+                result.append(.image(alt, url))
                 continue
             }
             let indent = raw.prefix { $0 == " " }.count / 2

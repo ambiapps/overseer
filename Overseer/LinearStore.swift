@@ -205,6 +205,19 @@ final class LinearStore {
         }
     }
 
+    /// Uploads a file to Linear, returning the URL to link from Markdown.
+    func upload(_ attachment: Attachment) async throws -> URL {
+        try await authorizedClient().upload(attachment)
+    }
+
+    /// Fetches an image linked from an issue, signed in.
+    func download(_ url: URL) async throws -> Data {
+        #if DEBUG
+        if isDemo { return Self.demoImage }
+        #endif
+        return try await authorizedClient().download(url)
+    }
+
     private func mutate(_ issueID: LinearIssue.ID, _ work: (LinearClient) async throws -> Void) async {
         do {
             try await work(try authorizedClient())
