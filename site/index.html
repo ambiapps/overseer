@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Overseer</title>
+  <meta name="description" content="Overseer is a Mac app for filing and following the tickets your coding agents work on. Tickets are GitHub issues on a project board; Linear boards work too.">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+  <meta property="og:title" content="Overseer">
+  <meta property="og:description" content="File a ticket. Agents pick it up. Watch it reach Done.">
+  <meta property="og:type" content="website">
+  <link rel="icon" href="app-icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+    <a class="brand" href="./" aria-label="Overseer home">
+      <img src="app-icon.svg" alt="" width="20" height="20">
+      <span>Overseer</span>
+    </a>
+    <nav>
+      <a href="#how">How it works</a>
+      <a href="#linear">Linear</a>
+      <a href="#install">Install</a>
+      <a href="https://github.com/ambiapps/overseer">GitHub</a>
+    </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero wrap">
+      <div class="hero-copy">
+        <img class="icon" src="app-icon.svg" alt="" width="72" height="72">
+        <p class="eyebrow">Overseer for Mac</p>
+        <h1>File a ticket. Agents take it from there.</h1>
+        <p class="lede">Overseer is a Mac app for the tickets your coding agents work on. File one into To&nbsp;Do and an agent picks it up. Follow it across the board, with its pull requests and checks, until it’s done.</p>
+        <div class="actions">
+          <a class="button primary" href="#install">Install Overseer</a>
+          <a class="more" href="https://github.com/ambiapps/overseer">View the source</a>
+        </div>
+      </div>
+
+      <figure class="board" aria-label="Example: a new ticket is filed into To Do, an agent moves it to In Progress, opens a pull request whose checks pass, and the ticket reaches Done">
+        <div class="board-bar">
+          <span class="board-title">Code board<small>All repositories</small></span>
+          <span class="status" data-status>Watching the board</span>
+        </div>
+        <div class="board-scroll">
+        <div class="columns">
+          <section class="column" data-col="todo">
+            <h3><span class="glyph"></span>To Do <span class="count">1</span></h3>
+            <ul class="cards">
+              <li class="card"><div class="id">web #408</div><div class="title">Dark mode for the pricing page</div><div class="meta"><span class="repo" style="--dot: var(--done)">web</span><span class="right">2 hr. ago</span></div></li>
+            </ul>
+          </section>
+          <section class="column" data-col="progress">
+            <h3><span class="glyph"></span>In Progress <span class="count">1</span></h3>
+            <ul class="cards">
+              <li class="card"><div class="id">api #405</div><div class="title">Paginate the receipts endpoint</div><div class="meta"><span class="repo" style="--dot: var(--busy)">api</span><span class="right">agent</span></div></li>
+            </ul>
+          </section>
+          <section class="column" data-col="review">
+            <h3><span class="glyph"></span>In Review <span class="count">1</span></h3>
+            <ul class="cards">
+              <li class="card"><div class="id">ios-app #401</div><div class="title">Haptics on the timer</div><div class="meta"><span class="repo">ios-app</span><span class="right"><span class="checks" data-checks="passed">Checks</span></span></div></li>
+            </ul>
+          </section>
+          <section class="column" data-col="done">
+            <h3><span class="glyph"></span>Done <span class="count">2</span></h3>
+            <ul class="cards">
+              <li class="card"><div class="id">mac-app #398</div><div class="title">Remember the window size</div><div class="meta"><span class="repo" style="--dot: var(--muted)">mac-app</span><span class="right">merged</span></div></li>
+              <li class="card"><div class="id">ios-app #396</div><div class="title">Fix clipped onboarding copy</div><div class="meta"><span class="repo">ios-app</span><span class="right">merged</span></div></li>
+            </ul>
+          </section>
+        </div>
+        </div>
+      </figure>
+    </section>
+
+    <section id="how" class="how band wrap">
+      <h2>How it works.</h2>
+      <ol class="steps">
+        <li>
+          <h3>File a ticket</h3>
+          <p>Press <strong>⌘N</strong>, pick a repository, write what you want and file it into To&nbsp;Do or Backlog. Tickets are GitHub issues on your organization’s project board.</p>
+        </li>
+        <li>
+          <h3>An agent picks it up</h3>
+          <p>Filing a ticket into To&nbsp;Do, or dragging one there, hands it to your agents. In public repositories only tickets an owner wrote are handed over.</p>
+        </li>
+        <li>
+          <h3>Follow it on the board</h3>
+          <p>A column per state: Backlog, To&nbsp;Do, In&nbsp;Progress, In&nbsp;Review and Done. Open a ticket to see its linked pull requests, their checks and the comments.</p>
+        </li>
+        <li>
+          <h3>Steer it</h3>
+          <p>Comment, edit, drag it to another column, restart the agents, or close and reopen it, all from the ticket.</p>
+        </li>
+      </ol>
+    </section>
+
+    <section class="example wrap">
+      <div class="example-intro">
+        <p class="eyebrow">A ticket’s morning</p>
+        <h2>Write it down, then get on with your day.</h2>
+        <p>At Ambi, agents implement and test most of our tickets. Overseer is where we file them and where we check on them, without opening a browser tab per issue.</p>
+      </div>
+      <ol class="log">
+        <li>
+          <time>09:12</time>
+          <div>
+            <h3>You file a ticket</h3>
+            <p>“The toggle labels in Settings clip at the largest text size.” Into To&nbsp;Do.</p>
+          </div>
+        </li>
+        <li data-kind="agent">
+          <time>09:13</time>
+          <div>
+            <h3>An agent picks it up</h3>
+            <p>The card moves to In&nbsp;Progress. It reproduces the bug, fixes the layout and runs the tests.</p>
+          </div>
+        </li>
+        <li data-kind="agent">
+          <time>09:31</time>
+          <div>
+            <h3>A pull request opens</h3>
+            <p>The ticket moves to In&nbsp;Review and shows the PR with its checks as they run.</p>
+          </div>
+        </li>
+        <li>
+          <time>09:40</time>
+          <div>
+            <h3>You comment</h3>
+            <p>“The footer under the toggles wraps too.” Click <strong>Restart Agents</strong> on the ticket and it goes back to To&nbsp;Do for another pass.</p>
+          </div>
+        </li>
+        <li data-kind="done">
+          <time>10:02</time>
+          <div>
+            <h3>Done</h3>
+            <p>Checks pass, you merge the PR and the ticket lands in Done.</p>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <section id="linear" class="linear band wrap">
+      <div class="example-intro">
+        <p class="eyebrow">Linear</p>
+        <h2>Your Linear board, too.</h2>
+        <p>Switch the toolbar from GitHub to Linear to see one team’s issues in a column per workflow state. Drag a card to change its state, and open it to read and add comments.</p>
+        <p>Paste a personal API key from Linear’s <strong>Settings › Security &amp; access</strong> into Overseer’s Settings, then pick the team.</p>
+      </div>
+      <figure>
+        <picture>
+          <source srcset="linear-dark.png" media="(prefers-color-scheme: dark)">
+          <img src="linear-light.png" alt="Overseer showing a Linear team’s issues in Backlog, Todo, In Progress, In Review and Done columns" width="2000" height="427" loading="lazy">
+        </picture>
+      </figure>
+    </section>
+
+    <section class="details wrap">
+      <h2>Stays out of your way.</h2>
+      <dl>
+        <div>
+          <dt>No backend</dt>
+          <dd>Tickets are plain GitHub issues on a GitHub project board. Overseer reads and writes them with your own login.</dd>
+        </div>
+        <div>
+          <dt>Uses your <code>gh</code> login</dt>
+          <dd>If you’re signed in to the GitHub CLI, there’s nothing to set up. Or paste a token in Settings.</dd>
+        </div>
+        <div>
+          <dt>Filter by repository</dt>
+          <dd>One board for the whole organization, narrowed to a single repository from the toolbar.</dd>
+        </div>
+        <div>
+          <dt>Updates itself</dt>
+          <dd>Overseer checks for a new release at launch and every hour, offers it, then replaces and relaunches itself.</dd>
+        </div>
+      </dl>
+    </section>
+
+    <section id="install" class="install band wrap">
+      <h2>Install.</h2>
+      <p>Download the latest build, open the DMG and drag Overseer to Applications.</p>
+      <div class="actions">
+        <a class="button primary" href="https://github.com/ambiapps/overseer/releases/latest">Download for Mac</a>
+      </div>
+      <div class="first-launch">
+        <h3>Opening it the first time</h3>
+        <p>Overseer isn’t notarized by Apple yet, so macOS blocks the first launch. You allow it once:</p>
+        <ol>
+          <li>Open Overseer from Applications. macOS says it can’t verify the app. Click <strong>Done</strong>.</li>
+          <li>Open System&nbsp;Settings › Privacy&nbsp;&amp;&nbsp;Security and scroll down to <strong>Security</strong>.</li>
+          <li>Next to “Overseer was blocked to protect your Mac”, click <strong>Open&nbsp;Anyway</strong>.</li>
+          <li>Click <strong>Open&nbsp;Anyway</strong> again and confirm with your password or Touch&nbsp;ID.</li>
+        </ol>
+        <p>After that it opens normally, and updates install themselves.</p>
+      </div>
+      <p>Or build it from source. The script puts <code>Overseer.app</code> in <code>~/Applications</code>.</p>
+      <pre><code>git clone https://github.com/ambiapps/overseer.git
+cd overseer
+./scripts/build-app.sh --install</code></pre>
+      <h3>You’ll need</h3>
+      <ul class="needs">
+        <li>macOS 15 or later</li>
+        <li>A GitHub login with <code>project</code> scope: <code>gh auth login</code>, or a token pasted in Settings</li>
+        <li>A GitHub project board with Backlog, To&nbsp;Do, In&nbsp;Progress, In&nbsp;Review and Done columns. Set its organization and number in Settings.</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer class="wrap">
+    <p>Overseer is made by <a href="https://ambi.se">Ambi</a>.</p>
+  </footer>
+
+  <script src="board.js" defer></script>
+</body>
+</html>

@@ -5,6 +5,8 @@ name: Release
 on:
   push:
     branches: [main]
+    # Website-only changes don't need a new app release.
+    paths-ignore: [site/**, docs/**, .github/workflows/pages.yml]
   workflow_dispatch:
 
 permissions:
