@@ -76,13 +76,26 @@ final class Store {
     var detail: Ticket?
     var detailComments: [Comment] = []
 
-    private var client: GitHubClient?
+    let accounts: Accounts
+    /// Boards the signed-in accounts can see, for the board picker.
+    var availableBoards: [BoardRef] = []
+    /// The board shown, saved across launches.
+    var boardRef: BoardRef? = BoardRef.saved {
+        didSet {
+            guard boardRef != oldValue else { return }
+            BoardRef.saved = boardRef
+            board = nil
+            repos = []
+            boardTickets = []
+            selection = nil
+            Task { await refresh() }
+        }
+    }
+
     private var pollTask: Task<Void, Never>?
 
-    private var org: String { UserDefaults.standard.string(forKey: "org") ?? "ambiapps" }
-    private var boardNumber: Int {
-        let n = UserDefaults.standard.integer(forKey: "boardNumber")
-        return n > 0 ? n : 8
+    init(accounts: Accounts) {
+        self.accounts = accounts
     }
 
     // MARK: Derived
@@ -122,18 +135,40 @@ final class Store {
 
     // MARK: Loading
 
+    /// The client for the account the chosen board belongs to.
     private func authorizedClient() throws -> GitHubClient {
-        if let client { return client }
-        guard let token = TokenProvider.token() else { throw GitHubError.noToken }
-        let c = GitHubClient(token: token)
-        client = c
-        return c
+        guard !accounts.isEmpty else { throw GitHubError.notSignedIn }
+        guard let ref = boardRef, accounts.logins.contains(ref.account) else { throw GitHubError.noBoard }
+        guard let client = accounts.client(for: ref.account) else { throw GitHubError.notSignedIn }
+        return client
     }
 
+    /// The board to open without asking: the one older versions were set to, or the only one.
+    static func preferredBoard(in boards: [BoardRef], defaults: UserDefaults = .standard) -> BoardRef? {
+        if let org = defaults.string(forKey: "org"), defaults.integer(forKey: "boardNumber") > 0,
+           let legacy = boards.first(where: { $0.owner == org && $0.number == defaults.integer(forKey: "boardNumber") }) {
+            return legacy
+        }
+        return boards.count == 1 ? boards[0] : nil
+    }
+
+    /// Lists the boards every signed-in account can see. An account that fails is skipped.
+    func loadAvailableBoards() async {
+        var found: [BoardRef] = []
+        for login in accounts.logins {
+            guard let client = accounts.client(for: login) else { continue }
+            if let boards = try? await client.boards(account: login) { found += boards }
+        }
+        availableBoards = found
+    }
+
+    /// Accounts changed: drop a board whose account is gone and load everything again.
     func resetAuth() {
-        client = nil
-        repos = []
+        if let ref = boardRef, !accounts.logins.contains(ref.account) { boardRef = nil }
         board = nil
+        repos = []
+        boardTickets = []
+        availableBoards = []
         Task { await refresh() }
     }
 
@@ -151,9 +186,26 @@ final class Store {
         isLoading = true
         defer { isLoading = false }
         do {
+            guard !accounts.isEmpty else {
+                board = nil
+                boardTickets = []
+                error = nil
+                lastRefresh = .now
+                return
+            }
+            if availableBoards.isEmpty { await loadAvailableBoards() }
+            if boardRef == nil, let pick = Self.preferredBoard(in: availableBoards) {
+                boardRef = pick // refreshes again for the new board
+                return
+            }
+            guard let ref = boardRef, accounts.logins.contains(ref.account) else {
+                error = nil
+                lastRefresh = .now
+                return
+            }
             let client = try authorizedClient()
-            if board == nil { board = try await client.board(org: org, number: boardNumber) }
-            if repos.isEmpty { repos = try await client.repos(org: org) }
+            if board == nil { board = try await client.board(ref) }
+            if repos.isEmpty { repos = try await client.repos(owner: ref.owner) }
             if let board { boardTickets = try await client.boardTickets(boardID: board.id) }
             error = nil
             lastRefresh = .now

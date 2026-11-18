@@ -6,6 +6,7 @@ import SwiftUI
 ///
 /// - `OVERSEER_SNAPSHOT=/path/board.png` writes the main window, then quits.
 /// - With `OVERSEER_SNAPSHOT_UPDATE=/path/update.png` too, it writes the update window instead.
+/// - With `OVERSEER_SNAPSHOT_SIGNIN=/path/signin.png` too, it writes the sign-in sheet with a made-up code.
 /// - `OVERSEER_APPEARANCE=dark|light` picks the appearance.
 /// - `OVERSEER_LINEAR_DEMO=1` shows the Linear board filled with made-up issues instead, and
 ///   `OVERSEER_SELECT=1` with it writes the first started issue's detail view.
@@ -28,6 +29,21 @@ enum Snapshot {
         guard let path = env["OVERSEER_SNAPSHOT"] else { return }
         if let appearance = env["OVERSEER_APPEARANCE"] {
             NSApp.appearance = NSAppearance(named: appearance == "dark" ? .darkAqua : .aqua)
+        }
+        if let signInPath = env["OVERSEER_SNAPSHOT_SIGNIN"] {
+            Task { @MainActor in
+                let window = NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
+                hide(window)
+                window.contentViewController = NSHostingController(rootView: SignInView(
+                    phase: .waiting(code: "4F2A-9C1E", url: URL(string: "https://github.com/login/device")!), isPreview: true)
+                    .environment(store)
+                    .background(Color(nsColor: .windowBackgroundColor)))
+                window.orderBack(nil)
+                try? await Task.sleep(for: .seconds(1))
+                write(window.contentView!, to: signInPath)
+                NSApp.terminate(nil)
+            }
+            return
         }
         if let updatePath = env["OVERSEER_SNAPSHOT_UPDATE"] {
             Task { @MainActor in
@@ -130,7 +146,13 @@ enum Snapshot {
 
     final class AppDelegate: NSObject, NSApplicationDelegate {
         func applicationWillFinishLaunching(_ notification: Notification) {
-            if Snapshot.isRequested { NSApp.setActivationPolicy(.accessory) }
+            guard Snapshot.isRequested else { return }
+            NSApp.setActivationPolicy(.accessory)
+            // Don't restore the installed Overseer's windows (same bundle ID); a snapshot needs a
+            // fresh main window. The argument domain is per process, so nothing is saved.
+            var arguments = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
+            arguments["ApplePersistenceIgnoreState"] = true
+            UserDefaults.standard.setVolatileDomain(arguments, forName: UserDefaults.argumentDomain)
         }
     }
 

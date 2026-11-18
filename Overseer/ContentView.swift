@@ -8,7 +8,23 @@ struct ContentView: View {
 
     var body: some View {
         @Bindable var store = store
-        BoardView(showBacklog: showBacklog)
+        Group {
+            if store.accounts.isEmpty {
+                SignedOutView()
+            } else if store.boardRef == nil {
+                ContentUnavailableView {
+                    Label("Choose a Board", systemImage: "rectangle.split.3x1")
+                } description: {
+                    Text(store.availableBoards.isEmpty && store.isLoading
+                         ? "Looking for boards your accounts can see…"
+                         : "Pick one of the boards your GitHub accounts can see. You can change it in Settings.")
+                } actions: {
+                    BoardPicker().labelsHidden().fixedSize()
+                }
+            } else {
+                BoardView(showBacklog: showBacklog)
+            }
+        }
             .navigationTitle(store.board?.title ?? "Overseer")
             .navigationSubtitle(subtitle)
             .searchable(text: $store.searchText, placement: .toolbar, prompt: "Filter tickets")
@@ -27,6 +43,7 @@ struct ContentView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .navigation) { SourcePicker(source: $source) }
+                if store.board != nil {
                 ToolbarItem(placement: .navigation) {
                     Menu {
                         Picker("Repository", selection: $store.repoFilter) {
@@ -42,6 +59,7 @@ struct ContentView: View {
                             .labelStyle(.titleAndIcon)
                     }
                     .help("Show one repository")
+                }
                 }
                 ToolbarItemGroup(placement: .primaryAction) {
                     Toggle(isOn: $showBacklog) {
@@ -65,6 +83,7 @@ struct ContentView: View {
                     } label: {
                         Label("New Ticket", systemImage: "square.and.pencil")
                     }
+                    .disabled(store.board == nil)
                     .help("New Ticket (⌘N)")
                 }
             }
@@ -97,6 +116,23 @@ struct ContentView: View {
     private var subtitle: String {
         guard let last = store.lastRefresh else { return "Loading…" }
         return "Updated \(last.formatted(date: .omitted, time: .shortened))"
+    }
+}
+
+/// Shown until a GitHub account is signed in.
+struct SignedOutView: View {
+    @State private var signingIn = false
+
+    var body: some View {
+        ContentUnavailableView {
+            Label("Sign in to GitHub", systemImage: "person.badge.key")
+        } description: {
+            Text("Overseer shows the issues on your GitHub project boards. Sign in with each GitHub account whose boards you want to see.")
+        } actions: {
+            Button("Sign In to GitHub…") { signingIn = true }
+                .buttonStyle(.borderedProminent)
+        }
+        .sheet(isPresented: $signingIn) { SignInView() }
     }
 }
 
