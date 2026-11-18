@@ -2,6 +2,9 @@ import SwiftUI
 
 @main
 struct OverseerApp: App {
+    #if DEBUG
+    @NSApplicationDelegateAdaptor(Snapshot.AppDelegate.self) private var snapshotDelegate
+    #endif
     @State private var store = Store()
     @State private var showingNewTicket = false
 
@@ -10,6 +13,9 @@ struct OverseerApp: App {
             ContentView(showingNewTicket: $showingNewTicket)
                 .environment(store)
                 .frame(minWidth: 960, minHeight: 560)
+                #if DEBUG
+                .background { if Snapshot.isRequested { Snapshot.WindowHider() } }
+                #endif
                 .task {
                     store.start()
                     #if DEBUG
