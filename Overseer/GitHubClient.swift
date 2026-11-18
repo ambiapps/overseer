@@ -1,52 +1,23 @@
 import Foundation
 
 nonisolated enum GitHubError: LocalizedError {
-    case noToken
+    case notSignedIn
+    case noBoard
     case http(Int, String)
     case graphQL(String)
+    case signIn(String)
+    case keychain(OSStatus)
 
     var errorDescription: String? {
         switch self {
-        case .noToken:
-            "No GitHub token. Run `gh auth login` in Terminal, or paste a token in Settings."
-        case .http(let code, let body):
-            "GitHub returned HTTP \(code): \(body.prefix(300))"
-        case .graphQL(let message):
-            "GitHub: \(message)"
+        case .notSignedIn: "Sign in to GitHub in Settings."
+        case .noBoard: "Pick a board in Settings."
+        case .http(401, _): "GitHub rejected the sign-in. Sign in to that account again in Settings."
+        case .http(let code, let body): "GitHub returned HTTP \(code): \(body.prefix(300))"
+        case .graphQL(let message): "GitHub: \(message)"
+        case .signIn(let message): message
+        case .keychain(let status): "Couldn't save the sign-in to the Keychain (\(status))."
         }
-    }
-}
-
-/// Finds a GitHub token: a token saved in Settings wins, otherwise the `gh` CLI's token.
-nonisolated enum TokenProvider {
-    static let defaultsKey = "githubToken"
-
-    static func token() -> String? {
-        if let saved = UserDefaults.standard.string(forKey: defaultsKey)?.trimmingCharacters(in: .whitespacesAndNewlines), !saved.isEmpty {
-            return saved
-        }
-        return ghToken()
-    }
-
-    static func ghToken() -> String? {
-        let candidates = ["/opt/homebrew/bin/gh", "/usr/local/bin/gh", "/usr/bin/gh"]
-        guard let gh = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else { return nil }
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: gh)
-        process.arguments = ["auth", "token"]
-        let out = Pipe()
-        process.standardOutput = out
-        process.standardError = Pipe()
-        do {
-            try process.run()
-            process.waitUntilExit()
-        } catch {
-            return nil
-        }
-        guard process.terminationStatus == 0 else { return nil }
-        let token = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return token.isEmpty ? nil : token
     }
 }
 
@@ -100,10 +71,10 @@ struct GitHubClient: Sendable {
 
     // MARK: Queries
 
-    func repos(org: String) async throws -> [Repo] {
+    func repos(owner: String) async throws -> [Repo] {
         let query = """
-        query($org: String!, $after: String) {
-          organization(login: $org) {
+        query($owner: String!, $after: String) {
+          repositoryOwner(login: $owner) {
             repositories(first: 100, after: $after, isArchived: false, orderBy: {field: PUSHED_AT, direction: DESC}) {
               pageInfo { hasNextPage endCursor }
               nodes { id name nameWithOwner hasIssuesEnabled }
@@ -114,19 +85,22 @@ struct GitHubClient: Sendable {
         var result: [Repo] = []
         var after: String?
         repeat {
-            var vars: [String: Any] = ["org": org]
+            var vars: [String: Any] = ["owner": owner]
             if let after { vars["after"] = after }
-            let page = try await graphQL(query, variables: vars, as: ReposResponse.self).organization.repositories
+            guard let owner = try await graphQL(query, variables: vars, as: ReposResponse.self).repositoryOwner
+            else { return result }
+            let page = owner.repositories
             result += page.nodes.filter(\.hasIssuesEnabled).map { Repo(id: $0.id, name: $0.name, nameWithOwner: $0.nameWithOwner) }
             after = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : nil
         } while after != nil
         return result
     }
 
-    func board(org: String, number: Int) async throws -> Board {
+    func board(_ ref: BoardRef) async throws -> Board {
+        let owner = ref.ownerIsOrganization ? "organization" : "user"
         let query = """
-        query($org: String!, $number: Int!) {
-          organization(login: $org) {
+        query($owner: String!, $number: Int!) {
+          owner: \(owner)(login: $owner) {
             projectV2(number: $number) {
               id number title url
               field(name: "Status") { ... on ProjectV2SingleSelectField { id options { id name } } }
@@ -134,10 +108,44 @@ struct GitHubClient: Sendable {
           }
         }
         """
-        let p = try await graphQL(query, variables: ["org": org, "number": number], as: BoardResponse.self).organization.projectV2
-        guard let field = p.field else { throw GitHubError.graphQL("Board #\(number) has no Status field") }
+        guard let p = try await graphQL(query, variables: ["owner": ref.owner, "number": ref.number], as: BoardResponse.self).owner?.projectV2
+        else { throw GitHubError.graphQL("\(ref.account) can't see board #\(ref.number) of \(ref.owner).") }
+        guard let field = p.field else { throw GitHubError.graphQL("Board “\(p.title)” has no Status field.") }
         return Board(id: p.id, number: p.number, title: p.title, url: p.url, statusFieldID: field.id,
                      options: field.options.map { Board.Option(id: $0.id, name: $0.name) })
+    }
+
+    /// The signed-in user's login.
+    func viewerLogin() async throws -> String {
+        struct Response: Decodable { struct Viewer: Decodable { let login: String }; let viewer: Viewer }
+        return try await graphQL("query { viewer { login } }", as: Response.self).viewer.login
+    }
+
+    /// Open boards the account can see: its own and its organizations'.
+    func boards(account: String) async throws -> [BoardRef] {
+        struct Project: Decodable { let number: Int; let title: String; let closed: Bool }
+        struct Projects: Decodable { let nodes: [Project?] }
+        struct Org: Decodable { let login: String; let projectsV2: Projects }
+        struct Orgs: Decodable { let nodes: [Org?] }
+        struct Viewer: Decodable { let login: String; let projectsV2: Projects; let organizations: Orgs }
+        struct Response: Decodable { let viewer: Viewer }
+        let query = """
+        query {
+          viewer {
+            login
+            projectsV2(first: 50) { nodes { number title closed } }
+            organizations(first: 50) { nodes { login projectsV2(first: 50) { nodes { number title closed } } } }
+          }
+        }
+        """
+        let viewer = try await graphQL(query, as: Response.self).viewer
+        func refs(_ projects: Projects, owner: String, isOrg: Bool) -> [BoardRef] {
+            projects.nodes.compactMap { $0 }.filter { !$0.closed }.map {
+                BoardRef(account: account, owner: owner, ownerIsOrganization: isOrg, number: $0.number, title: $0.title)
+            }
+        }
+        return refs(viewer.projectsV2, owner: viewer.login, isOrg: false)
+            + viewer.organizations.nodes.compactMap { $0 }.flatMap { refs($0.projectsV2, owner: $0.login, isOrg: true) }
     }
 
     /// Every issue on the board (open or closed), in board order.
@@ -276,7 +284,7 @@ private struct ReposResponse: Decodable {
         let nameWithOwner: String
         let hasIssuesEnabled: Bool
     }
-    let organization: Org
+    let repositoryOwner: Org?
 }
 
 private struct GQLUser: Decodable {
@@ -373,7 +381,7 @@ private struct NodeResponse: Decodable { let node: IssueNode }
 private struct PageInfo: Decodable { let hasNextPage: Bool; let endCursor: String? }
 
 private struct BoardResponse: Decodable {
-    struct Org: Decodable { let projectV2: Project }
+    struct Owner: Decodable { let projectV2: Project? }
     struct Project: Decodable {
         struct Field: Decodable { struct Option: Decodable { let id: String; let name: String }; let id: String; let options: [Option] }
         let id: String
@@ -382,7 +390,7 @@ private struct BoardResponse: Decodable {
         let url: URL
         let field: Field?
     }
-    let organization: Org
+    let owner: Owner?
 }
 
 private struct BoardItemsResponse: Decodable {

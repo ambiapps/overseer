@@ -5,7 +5,7 @@ struct OverseerApp: App {
     #if DEBUG
     @NSApplicationDelegateAdaptor(Snapshot.AppDelegate.self) private var snapshotDelegate
     #endif
-    @State private var store = Store()
+    @State private var store = Store(accounts: Accounts())
     @State private var linear = LinearStore()
     @AppStorage("boardSource") private var source = BoardSource.github
     @State private var showingNewTicket = false
