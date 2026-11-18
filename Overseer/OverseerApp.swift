@@ -2,6 +2,9 @@ import SwiftUI
 
 @main
 struct OverseerApp: App {
+    #if DEBUG
+    @NSApplicationDelegateAdaptor(Snapshot.AppDelegate.self) private var snapshotDelegate
+    #endif
     @State private var store = Store()
     @State private var linear = LinearStore()
     @AppStorage("boardSource") private var source = BoardSource.github
@@ -28,6 +31,9 @@ struct OverseerApp: App {
             .environment(store)
             .environment(linear)
             .frame(minWidth: 960, minHeight: 560)
+            #if DEBUG
+            .background { if Snapshot.isRequested { Snapshot.WindowHider() } }
+            #endif
             .task {
                 guard !Self.isTesting else { return }
                 #if DEBUG

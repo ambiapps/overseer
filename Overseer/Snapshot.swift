@@ -13,7 +13,15 @@ import SwiftUI
 ///   `/path/board-ticket.png`. The inspector pane can't be captured from inside the process, so
 ///   the same view is rendered in a window of the inspector's width.
 enum Snapshot {
-    static var isRequested: Bool { ProcessInfo.processInfo.environment["OVERSEER_SNAPSHOT"] != nil }
+    static let isRequested = ProcessInfo.processInfo.environment["OVERSEER_SNAPSHOT"] != nil
+
+    /// Keeps a snapshot run from flashing windows or stealing focus: no Dock icon or activation,
+    /// and every window fully transparent and click-through. `cacheDisplay` still renders them.
+    static func hide(_ window: NSWindow) {
+        window.alphaValue = 0
+        window.hasShadow = false
+        window.ignoresMouseEvents = true
+    }
 
     static func run(store: Store, linear: LinearStore, source: Binding<BoardSource>) {
         let env = ProcessInfo.processInfo.environment
@@ -24,6 +32,7 @@ enum Snapshot {
         if let updatePath = env["OVERSEER_SNAPSHOT_UPDATE"] {
             Task { @MainActor in
                 let window = NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
+                hide(window)
                 window.contentViewController = NSHostingController(rootView: UpdateAvailableView(
                     newVersion: "0.1.0 (12)", currentVersion: "0.1.0 (11)", canInstall: true,
                     releaseNotes: URL(string: "https://github.com/ambiapps/overseer/releases")!, choose: { _ in })
@@ -73,6 +82,7 @@ enum Snapshot {
                 while store.detail == nil { try? await Task.sleep(for: .milliseconds(200)) }
                 let detail = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 460, height: 860),
                                       styleMask: [.titled], backing: .buffered, defer: false)
+                hide(detail)
                 detail.contentView = NSHostingView(rootView: TicketDetailView(ticket: store.selectedTicket!)
                     .environment(store)
                     .background(.background))
@@ -98,10 +108,30 @@ enum Snapshot {
     private static func writeDetail(_ view: some View, to path: String) async {
         let detail = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 460, height: 860),
                               styleMask: [.titled], backing: .buffered, defer: false)
+        hide(detail)
         detail.contentView = NSHostingView(rootView: view.background(.background))
         detail.orderBack(nil)
         try? await Task.sleep(for: .seconds(1.5))
         write(detail.contentView!, to: path.replacingOccurrences(of: ".png", with: "-ticket.png"))
+    }
+
+    /// Hides the hosting window as soon as SwiftUI puts the view in it, before it's first drawn.
+    struct WindowHider: NSViewRepresentable {
+        func makeNSView(context: Context) -> NSView { HiderView() }
+        func updateNSView(_ nsView: NSView, context: Context) {}
+
+        private final class HiderView: NSView {
+            override func viewDidMoveToWindow() {
+                super.viewDidMoveToWindow()
+                if let window { Snapshot.hide(window) }
+            }
+        }
+    }
+
+    final class AppDelegate: NSObject, NSApplicationDelegate {
+        func applicationWillFinishLaunching(_ notification: Notification) {
+            if Snapshot.isRequested { NSApp.setActivationPolicy(.accessory) }
+        }
     }
 
     private static func write(_ view: NSView, to path: String) {
