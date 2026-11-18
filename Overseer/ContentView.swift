@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @Environment(Store.self) private var store
     @Binding var showingNewTicket: Bool
+    @Binding var source: BoardSource
     @AppStorage("showBacklog") private var showBacklog = true
 
     var body: some View {
@@ -25,6 +26,7 @@ struct ContentView: View {
                 if let id { Task { await store.loadDetail(id: id) } }
             }
             .toolbar {
+                ToolbarItem(placement: .navigation) { SourcePicker(source: $source) }
                 ToolbarItem(placement: .navigation) {
                     Menu {
                         Picker("Repository", selection: $store.repoFilter) {

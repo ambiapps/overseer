@@ -7,11 +7,15 @@ import SwiftUI
 /// - `OVERSEER_SNAPSHOT=/path/board.png` writes the main window, then quits.
 /// - With `OVERSEER_SNAPSHOT_UPDATE=/path/update.png` too, it writes the update window instead.
 /// - `OVERSEER_APPEARANCE=dark|light` picks the appearance.
+/// - `OVERSEER_LINEAR_DEMO=1` shows the Linear board filled with made-up issues instead, and
+///   `OVERSEER_SELECT=1` with it writes the first started issue's detail view.
 /// - `OVERSEER_SELECT=<column>` also writes the first ticket of that column's detail view to
 ///   `/path/board-ticket.png`. The inspector pane can't be captured from inside the process, so
 ///   the same view is rendered in a window of the inspector's width.
 enum Snapshot {
-    static func runIfRequested(store: Store) {
+    static var isRequested: Bool { ProcessInfo.processInfo.environment["OVERSEER_SNAPSHOT"] != nil }
+
+    static func run(store: Store, linear: LinearStore, source: Binding<BoardSource>) {
         let env = ProcessInfo.processInfo.environment
         guard let path = env["OVERSEER_SNAPSHOT"] else { return }
         if let appearance = env["OVERSEER_APPEARANCE"] {
@@ -31,6 +35,28 @@ enum Snapshot {
             }
             return
         }
+        if env["OVERSEER_LINEAR_DEMO"] != nil {
+            source.wrappedValue = .linear
+            linear.fillWithDemo()
+            Task { @MainActor in
+                guard let window = await mainWindow() else { return }
+                write(window.contentView?.superview ?? window.contentView!, to: path)
+                if env["OVERSEER_SELECT"] != nil,
+                   let started = linear.states.first(where: { $0.type == "started" }),
+                   let issue = linear.issues(in: started).first {
+                    linear.selection = issue.id
+                    // Let the selection change (which clears the detail) settle first.
+                    try? await Task.sleep(for: .milliseconds(300))
+                    linear.detail = issue
+                    linear.detailComments = LinearStore.demoComments
+                    await writeDetail(LinearIssueDetailView(issue: issue).environment(linear), to: path)
+                }
+                NSApp.terminate(nil)
+            }
+            return
+        }
+        source.wrappedValue = .github
+        store.start()
         Task { @MainActor in
             while store.lastRefresh == nil { try? await Task.sleep(for: .milliseconds(200)) }
             guard let window = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil }) else {
@@ -56,6 +82,26 @@ enum Snapshot {
             }
             NSApp.terminate(nil)
         }
+    }
+
+    private static func mainWindow() async -> NSWindow? {
+        try? await Task.sleep(for: .milliseconds(500))
+        guard let window = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil }) else {
+            NSApp.terminate(nil)
+            return nil
+        }
+        window.setContentSize(NSSize(width: 1500, height: 860))
+        try? await Task.sleep(for: .seconds(1.5))
+        return window
+    }
+
+    private static func writeDetail(_ view: some View, to path: String) async {
+        let detail = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 460, height: 860),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        detail.contentView = NSHostingView(rootView: view.background(.background))
+        detail.orderBack(nil)
+        try? await Task.sleep(for: .seconds(1.5))
+        write(detail.contentView!, to: path.replacingOccurrences(of: ".png", with: "-ticket.png"))
     }
 
     private static func write(_ view: NSView, to path: String) {
