@@ -33,3 +33,7 @@ Open `Overseer.xcodeproj` in Xcode and run, or:
 Local builds are build 0. They're only offered a release with a newer marketing version, and a Debug build from Xcode doesn't check for updates.
 
 It uses your `gh` CLI login (`gh auth login`; the token needs `project` scope), or a token pasted in Settings. Settings also hold the organization and board number.
+
+## Website
+
+[overseer.ambi.se](https://overseer.ambi.se) is plain HTML and CSS in `site/`, with no build step. Preview it with `python3 -m http.server --directory site`. Merges to `main` that touch `site/` deploy it to GitHub Pages via `.github/workflows/pages.yml`, and don't cut an app release.
