@@ -44,6 +44,10 @@ struct TicketDetailView: View {
                 } label: { Label("Edit", systemImage: "pencil") }
                     .disabled(isEditing)
                     .help("Edit ticket")
+                Button { store.selection = nil } label: { Label("Close", systemImage: "sidebar.trailing") }
+                    .keyboardShortcut(.cancelAction)
+                    .disabled(isEditing)
+                    .help("Close (Esc)")
             }
         }
     }
