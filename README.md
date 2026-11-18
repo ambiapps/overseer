@@ -5,7 +5,7 @@ A native macOS app for filing and managing the tickets our agents work on.
 Tickets are GitHub issues in `ambiapps`, tracked on the [Code board](https://github.com/orgs/ambiapps/projects/8). Filing a ticket into **To Do**, or moving one there, hands it to the agents: `ambre-agent`'s Worker hears the board move and starts `ambre-agent.yml`. In public repositories that only happens for tickets an owner wrote.
 
 - **⌘N** files a ticket into To Do or Backlog.
-- The board shows a column per state (Backlog, To Do, In Progress, In Review, Done); drag a card to move it. The toolbar filters by repository.
+- The board shows four columns by what the agents are doing: **Hold** (Backlog and the other parked statuses, or not on the board), **Todo** (To Do, not picked up yet), **In Progress** (In Progress on the board, or an open PR in review) and **Needs Clarification** (the agent is blocked and set that board status). Drag a card into Hold or Todo to move it. Done and closed tickets aren't shown. The toolbar filters by repository.
 - A ticket shows its linked PRs and their checks, its comments, and buttons to move it on the board, restart the agents, comment, edit, close or reopen.
 
 ## Linear

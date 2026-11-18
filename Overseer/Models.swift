@@ -105,6 +105,7 @@ enum TicketStatus: String, CaseIterable, Identifiable, Sendable {
     case todo = "To Do"
     case inProgress = "In Progress"
     case review = "In Review"
+    case needsClarification = "Needs Clarification"
     case backlog = "Backlog"
     case unfiled = "Not on Board"
     case done = "Done"
@@ -117,7 +118,8 @@ enum TicketStatus: String, CaseIterable, Identifiable, Sendable {
         case .todo: "tray.and.arrow.down.fill"
         case .inProgress: "gearshape.2.fill"
         case .review: "arrow.triangle.pull"
-        case .backlog: "archivebox"
+        case .needsClarification: "questionmark.bubble.fill"
+        case .backlog: "pause.circle"
         case .unfiled: "square.dashed"
         case .done: "checkmark.circle.fill"
         case .closed: "xmark.circle"
@@ -129,6 +131,7 @@ enum TicketStatus: String, CaseIterable, Identifiable, Sendable {
         case .todo: .orange
         case .inProgress: .blue
         case .review: .purple
+        case .needsClarification: .red
         case .backlog, .unfiled, .closed: .secondary
         case .done: .green
         }
@@ -138,8 +141,11 @@ enum TicketStatus: String, CaseIterable, Identifiable, Sendable {
         if !ticket.isOpen {
             return ticket.stateReason == "COMPLETED" || ticket.pullRequests.contains { $0.state == .merged } ? .done : .closed
         }
+        let item = ticket.boardItem(on: board)
+        // A blocked agent says so on the board, which wins over an open PR it gave up on.
+        if item?.status?.lowercased() == Store.needsClarificationStatus.lowercased() { return .needsClarification }
         if ticket.pullRequests.contains(where: { $0.state == .open }) { return .review }
-        guard let item = ticket.boardItem(on: board) else { return .unfiled }
+        guard let item else { return .unfiled }
         switch item.status?.lowercased() {
         case "to do": return .todo
         case "in progress": return .inProgress
