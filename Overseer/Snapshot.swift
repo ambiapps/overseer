@@ -9,7 +9,8 @@ import SwiftUI
 /// - With `OVERSEER_SNAPSHOT_SIGNIN=/path/signin.png` too, it writes the sign-in sheet with a made-up code.
 /// - `OVERSEER_APPEARANCE=dark|light` picks the appearance.
 /// - `OVERSEER_LINEAR_DEMO=1` shows the Linear board filled with made-up issues instead, and
-///   `OVERSEER_SELECT=1` with it writes the first started issue's detail view, and
+///   `OVERSEER_SELECT=1` with it writes the first started issue's detail view (and the window
+///   with it open to `/path/board-window.png`), and
 ///   `OVERSEER_SNAPSHOT_NEWTICKET=/path/new.png` writes the New Linear Ticket sheet.
 /// - `OVERSEER_SELECT=<column>` also writes the first ticket of that column's detail view to
 ///   `/path/board-ticket.png`. The inspector pane can't be captured from inside the process, so
@@ -86,6 +87,7 @@ enum Snapshot {
                     linear.detail = issue
                     linear.detailComments = LinearStore.demoComments
                     await writeDetail(LinearIssueDetailView(issue: issue).environment(linear), to: path)
+                    write(window.contentView?.superview ?? window.contentView!, to: path.replacingOccurrences(of: ".png", with: "-window.png"))
                 }
                 NSApp.terminate(nil)
             }

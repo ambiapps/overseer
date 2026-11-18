@@ -319,6 +319,9 @@ struct LinearIssueDetailView: View {
         .toolbar {
             Button { openURL(issue.url) } label: { Label("Open in Linear", systemImage: "safari") }
                 .help("Open in Linear")
+            Button { store.selection = nil } label: { Label("Close", systemImage: "sidebar.trailing") }
+                .keyboardShortcut(.cancelAction)
+                .help("Close (Esc)")
         }
     }
 
