@@ -5,7 +5,7 @@ import Security
 /// The GitHub OAuth App that identifies Overseer. Device-flow sign-in needs only its public
 /// client ID; there is no client secret in the app.
 nonisolated enum GitHubOAuth {
-    static let clientID = "REPLACE_WITH_CLIENT_ID"
+    static let clientID = "Ov23liAB2jHcMhINKCwX"
     /// Issues in private repositories, organization membership, and project boards.
     static let scopes = "repo read:org project"
 }
@@ -134,9 +134,6 @@ nonisolated enum DeviceFlow {
     }
 
     static func start() async throws -> Code {
-        guard GitHubOAuth.clientID != "REPLACE_WITH_CLIENT_ID" else {
-            throw GitHubError.signIn("This build has no GitHub OAuth client ID, so it can't sign in.")
-        }
         let data = try await post("https://github.com/login/device/code",
                                   ["client_id": GitHubOAuth.clientID, "scope": GitHubOAuth.scopes])
         if let failure = try? JSONDecoder().decode(Failure.self, from: data) {
