@@ -43,22 +43,12 @@ struct UpdaterTests {
     @Test func picksTheDMGFromARelease() throws {
         let json = """
         {"tag_name": "v0.1.0(12)", "html_url": "https://github.com/ambiapps/overseer/releases/tag/v0.1.0(12)",
-         "assets": [{"name": "notes.txt", "url": "https://api.github.com/repos/ambiapps/overseer/releases/assets/1"},
-                    {"name": "Overseer-0.1.0-12.dmg", "url": "https://api.github.com/repos/ambiapps/overseer/releases/assets/2"}]}
+         "assets": [{"name": "notes.txt", "browser_download_url": "https://github.com/ambiapps/overseer/releases/download/v0.1.0(12)/notes.txt"},
+                    {"name": "Overseer-0.1.0-12.dmg", "browser_download_url": "https://github.com/ambiapps/overseer/releases/download/v0.1.0(12)/Overseer-0.1.0-12.dmg"}]}
         """
         let release = try JSONDecoder().decode(Release.self, from: Data(json.utf8))
         #expect(release.version == AppVersion(tag: "0.1.0(12)"))
-        #expect(release.dmg?.url.lastPathComponent == "2")
-    }
-
-    @Test func theTokenDoesNotFollowARedirectToAnotherHost() {
-        var request = URLRequest(url: URL(string: "https://objects.githubusercontent.com/asset")!)
-        request.setValue("Bearer secret", forHTTPHeaderField: "Authorization")
-        #expect(DropAuthorizationOnRedirect.redirected(request).value(forHTTPHeaderField: "Authorization") == nil)
-
-        var github = URLRequest(url: URL(string: "https://api.github.com/repos/x/y/releases/assets/2")!)
-        github.setValue("Bearer secret", forHTTPHeaderField: "Authorization")
-        #expect(DropAuthorizationOnRedirect.redirected(github).value(forHTTPHeaderField: "Authorization") == "Bearer secret")
+        #expect(release.dmg?.url.lastPathComponent == "Overseer-0.1.0-12.dmg")
     }
 
     @Test func rejectsAnAppThatIsNotOverseer() throws {

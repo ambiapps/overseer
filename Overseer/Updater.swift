@@ -60,9 +60,13 @@ nonisolated struct AppVersion: Comparable, CustomStringConvertible, Sendable {
 nonisolated struct Release: Decodable, Sendable {
     struct Asset: Decodable, Sendable {
         let name: String
-        /// The asset's API URL. The repository is private, so the browser download URL won't work
-        /// for an app; this one does, with a token and `Accept: application/octet-stream`.
+        /// The public download link. It redirects to GitHub's storage host.
         let url: URL
+
+        enum CodingKeys: String, CodingKey {
+            case name
+            case url = "browser_download_url"
+        }
     }
 
     let tagName: String
@@ -83,8 +87,7 @@ nonisolated struct Release: Decodable, Sendable {
 ///
 /// Installing downloads the release DMG, copies the app out of it and hands the swap to a small
 /// shell script that waits for Overseer to quit, replaces the bundle and relaunches it. The same
-/// mechanism as Orchard's updater, with the GitHub token the app already uses, since the
-/// repository is private.
+/// mechanism as Orchard's updater. The repository is public, so no token is involved.
 @MainActor
 @Observable
 final class Updater {
@@ -180,10 +183,8 @@ final class Updater {
         return version > current
     }
 
-    nonisolated static func authorizedRequest(_ url: URL, accept: String) throws -> URLRequest {
-        guard let token = TokenProvider.token() else { throw GitHubError.noToken }
+    nonisolated static func request(_ url: URL, accept: String) -> URLRequest {
         var request = URLRequest(url: url)
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue(accept, forHTTPHeaderField: "Accept")
         request.setValue("Overseer", forHTTPHeaderField: "User-Agent")
         request.timeoutInterval = 60
@@ -192,10 +193,10 @@ final class Updater {
 
     nonisolated static func fetchLatest() async throws -> Release {
         let url = URL(string: "https://api.github.com/repos/\(repository)/releases/latest")!
-        let (data, response) = try await URLSession.shared.data(for: try authorizedRequest(url, accept: "application/vnd.github+json"))
+        let (data, response) = try await URLSession.shared.data(for: request(url, accept: "application/vnd.github+json"))
         if let http = response as? HTTPURLResponse, http.statusCode != 200 {
             throw UpdateError(http.statusCode == 404
-                ? "No release found. Your GitHub token needs access to \(repository)."
+                ? "\(repository) hasn't published a release yet."
                 : "GitHub answered with HTTP \(http.statusCode).")
         }
         return try JSONDecoder().decode(Release.self, from: data)
@@ -306,8 +307,7 @@ final class Updater {
 
     private nonisolated static func stage(into work: URL, from url: URL, expecting version: AppVersion?) async throws -> URL {
         let dmg = work.appendingPathComponent("Overseer.dmg")
-        let request = try authorizedRequest(url, accept: "application/octet-stream")
-        let (downloaded, response) = try await URLSession.shared.download(for: request, delegate: DropAuthorizationOnRedirect())
+        let (downloaded, response) = try await URLSession.shared.download(for: request(url, accept: "application/octet-stream"))
         if let http = response as? HTTPURLResponse, http.statusCode != 200 {
             throw UpdateError("The download failed with HTTP \(http.statusCode).")
         }
@@ -395,23 +395,6 @@ final class Updater {
         /usr/bin/xattr -dr com.apple.quarantine "$2" 2>/dev/null
         "$4" "$2"
         """#
-}
-
-/// GitHub answers an asset download with a redirect to its storage host, which rejects a request
-/// that still carries the GitHub token. Drop it for any other host.
-nonisolated final class DropAuthorizationOnRedirect: NSObject, URLSessionTaskDelegate {
-    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
-                    newRequest request: URLRequest, completionHandler: @escaping @Sendable (URLRequest?) -> Void) {
-        completionHandler(Self.redirected(request))
-    }
-
-    static func redirected(_ request: URLRequest) -> URLRequest {
-        var request = request
-        if request.url?.host != "api.github.com" {
-            request.setValue(nil, forHTTPHeaderField: "Authorization")
-        }
-        return request
-    }
 }
 
 nonisolated struct UpdateError: LocalizedError {
