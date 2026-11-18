@@ -152,7 +152,7 @@ enum TicketStatus: String, CaseIterable, Identifiable, Sendable {
 extension Color {
     init(hex: String) {
         var value: UInt64 = 0
-        Scanner(string: hex).scanHexInt64(&value)
+        Scanner(string: hex.hasPrefix("#") ? String(hex.dropFirst()) : hex).scanHexInt64(&value)
         self.init(
             red: Double((value >> 16) & 0xFF) / 255,
             green: Double((value >> 8) & 0xFF) / 255,

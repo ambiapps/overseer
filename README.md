@@ -8,6 +8,12 @@ Tickets are GitHub issues in `ambiapps`, tracked on the [Code board](https://git
 - The board shows a column per state (Backlog, To Do, In Progress, In Review, Done); drag a card to move it. The toolbar filters by repository.
 - A ticket shows its linked PRs and their checks, its comments, and buttons to move it on the board, restart the agents, comment, edit, close or reopen.
 
+## Linear
+
+The toolbar switches between the GitHub board and a Linear board. The Linear board shows one team's issues in a column per workflow state. Drag a card to change its state, and open it to read and add comments. Other agents pick Linear issues up on their own; Overseer only shows and moves them.
+
+To connect it, sign in to linear.app (Google SSO works), create a personal API key under **Settings → Security & access**, and paste it in Overseer's Settings. Pick the team there or from the toolbar.
+
 ## Install and updates
 
 Every merge to `main` runs `.github/workflows/release.yml` on a GitHub-hosted macOS runner (`macos-26`). It runs the tests, builds `Overseer-<version>-<build>.dmg` and publishes a GitHub release tagged `v<VERSION>(<run number>)`.
