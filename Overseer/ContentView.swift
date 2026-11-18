@@ -63,9 +63,9 @@ struct ContentView: View {
                 }
                 ToolbarItemGroup(placement: .primaryAction) {
                     Toggle(isOn: $showBacklog) {
-                        Label("Backlog", systemImage: "archivebox")
+                        Label("Hold", systemImage: "pause.circle")
                     }
-                    .help(showBacklog ? "Hide the Backlog column" : "Show the Backlog column")
+                    .help(showBacklog ? "Hide the Hold column" : "Show the Hold column")
 
                     Button {
                         Task { await store.refresh() }
@@ -162,7 +162,7 @@ struct BoardView: View {
     let showBacklog: Bool
 
     private var columns: [BoardColumn] {
-        BoardColumn.allCases.filter { showBacklog || $0 != .backlog }
+        BoardColumn.allCases.filter { showBacklog || $0 != .hold }
     }
 
     var body: some View {
@@ -278,13 +278,11 @@ struct TicketCard: View {
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
                 Spacer()
-                if status == .inProgress {
+                if status == .inProgress || status == .needsClarification {
                     Image(systemName: status.symbol)
                         .font(.caption)
                         .foregroundStyle(status.tint)
-                        .symbolEffect(.pulse)
-                } else if status == .closed {
-                    Text("Not planned").font(.caption2).foregroundStyle(.secondary)
+                        .symbolEffect(.pulse, isActive: status == .inProgress)
                 }
             }
             Text(ticket.title)
@@ -319,6 +317,5 @@ struct TicketCard: View {
         }
         .shadow(color: .black.opacity(0.06), radius: 1, y: 1)
         .contentShape(RoundedRectangle(cornerRadius: 8))
-        .opacity(status == .closed ? 0.6 : 1)
     }
 }

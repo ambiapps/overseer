@@ -42,6 +42,7 @@ struct OverseerApp: App {
                     return
                 }
                 #endif
+                AppMover.offerIfNeeded()
                 store.start()
                 linear.start()
             }

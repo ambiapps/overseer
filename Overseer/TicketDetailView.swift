@@ -133,6 +133,7 @@ struct TicketDetailView: View {
         case .todo: "In To Do: handed to the agents"
         case .inProgress: "In progress"
         case .review: "PR open for review"
+        case .needsClarification: "The agent needs clarification"
         case .backlog: "In \(boardStatus ?? "Backlog")"
         case .unfiled: "Not on the board"
         case .done: "Done"
@@ -144,6 +145,7 @@ struct TicketDetailView: View {
         switch status {
         case .todo: "The agents start when a ticket moves into To Do. If nothing happens, check that the Ambre agent's GitHub App can see \(ticket.repoName)."
         case .review: "Comment on the PR to have the agent make changes."
+        case .needsClarification: "Its question is in the comments. Answer it, edit the ticket if that helps, then move it back to To Do."
         case .backlog, .unfiled: "Move it to To Do when it's ready for an agent."
         default: ""
         }

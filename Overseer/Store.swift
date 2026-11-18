@@ -2,61 +2,55 @@ import Foundation
 import Observation
 import SwiftUI
 
-/// A column on the board. Most are a board Status; In Review is derived from an open linked PR.
+/// A column on the board, by what the agents are doing with a ticket. Done and closed tickets aren't shown.
 enum BoardColumn: String, CaseIterable, Identifiable {
-    case backlog, todo, inProgress, review, done
+    case hold, todo, inProgress, needsClarification
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .backlog: "Backlog"
-        case .todo: "To Do"
+        case .hold: "Hold"
+        case .todo: "Todo"
         case .inProgress: "In Progress"
-        case .review: "In Review"
-        case .done: "Done"
+        case .needsClarification: "Needs Clarification"
         }
     }
 
     var statuses: Set<TicketStatus> {
         switch self {
-        case .backlog: [.backlog, .unfiled]
+        case .hold: [.backlog, .unfiled]
         case .todo: [.todo]
-        case .inProgress: [.inProgress]
-        case .review: [.review]
-        case .done: [.done, .closed]
+        case .inProgress: [.inProgress, .review]
+        case .needsClarification: [.needsClarification]
         }
     }
 
     /// Representative status for the column's symbol and tint.
     var status: TicketStatus {
         switch self {
-        case .backlog: .backlog
+        case .hold: .backlog
         case .todo: .todo
         case .inProgress: .inProgress
-        case .review: .review
-        case .done: .done
+        case .needsClarification: .needsClarification
         }
     }
 
-    /// The board Status a card dropped here gets. In Review follows the PR, so nothing drops there.
+    /// The board Status a card dropped here gets. In Progress and Needs Clarification are the agents' to set.
     var dropStatus: String? {
         switch self {
-        case .backlog: Store.backlogStatus
+        case .hold: Store.backlogStatus
         case .todo: Store.todoStatus
-        case .inProgress: "In Progress"
-        case .review: nil
-        case .done: "Done"
+        case .inProgress, .needsClarification: nil
         }
     }
 
     var hint: String {
         switch self {
-        case .backlog: "Not ready for an agent yet."
-        case .todo: "Dropping a ticket here starts the agents."
-        case .inProgress: "Being worked on."
-        case .review: "An open PR is waiting. Comment on it to have the agent change it."
-        case .done: "Closed in the last \(Store.doneDays) days."
+        case .hold: "Not for the agents yet."
+        case .todo: "Dropping a ticket here hands it to the agents."
+        case .inProgress: "The agents are building or reviewing it."
+        case .needsClarification: "The agent is blocked. Answer its question on the issue, then move it back to Todo."
         }
     }
 }
@@ -66,7 +60,7 @@ enum BoardColumn: String, CaseIterable, Identifiable {
 final class Store {
     static let todoStatus = "To Do"
     static let backlogStatus = "Backlog"
-    static let doneDays = 14
+    static let needsClarificationStatus = "Needs Clarification"
 
     var repos: [Repo] = []
     var board: Board?
@@ -128,10 +122,8 @@ final class Store {
     }
 
     func tickets(in column: BoardColumn) -> [Ticket] {
-        let cutoff = Date.now.addingTimeInterval(-Double(Self.doneDays) * 86_400)
-        return filteredTickets
+        filteredTickets
             .filter { column.statuses.contains(status(of: $0)) }
-            .filter { column != .done || $0.updatedAt >= cutoff }
             .sorted { $0.updatedAt > $1.updatedAt }
     }
 

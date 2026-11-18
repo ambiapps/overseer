@@ -1,0 +1,334 @@
+{
+  "fill-specializations": [
+    {
+      "value": {
+        "linear-gradient": [
+          "display-p3:0.07843,0.09804,0.21176,1.00000",
+          "display-p3:0.01961,0.02745,0.05882,1.00000"
+        ]
+      }
+    },
+    {
+      "appearance": "dark",
+      "value": {
+        "linear-gradient": [
+          "display-p3:0.04706,0.06275,0.14902,1.00000",
+          "display-p3:0.00784,0.01176,0.03137,1.00000"
+        ]
+      }
+    }
+  ],
+  "groups": [
+    {
+      "name": "Pupil",
+      "layers": [
+        {
+          "name": "glint",
+          "image-name": "glint.svg",
+          "glass": false,
+          "opacity": 1.0,
+          "position": {
+            "scale": 1,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          },
+          "fill-specializations": [
+            {
+              "value": "automatic"
+            },
+            {
+              "appearance": "tinted",
+              "value": {
+                "solid": "display-p3:1.00000,1.00000,1.00000,1.00000"
+              }
+            }
+          ]
+        },
+        {
+          "name": "pupil",
+          "image-name": "pupil.svg",
+          "glass": true,
+          "opacity": 1.0,
+          "position": {
+            "scale": 1,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          },
+          "fill-specializations": [
+            {
+              "value": "automatic"
+            },
+            {
+              "appearance": "tinted",
+              "value": {
+                "solid": "display-p3:0.03922,0.03922,0.03922,1.00000"
+              }
+            }
+          ]
+        }
+      ],
+      "lighting": "combined",
+      "specular": true,
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.6
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0
+      }
+    },
+    {
+      "name": "Petals 1",
+      "lighting": "individual",
+      "specular": true,
+      "shadow": {
+        "kind": "layer-color",
+        "opacity": 0.6
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.2
+      },
+      "refractivity": {
+        "enabled": true,
+        "strength": 0.3,
+        "depth": 0.1
+      },
+      "layers": [
+        {
+          "name": "petal0",
+          "image-name": "p0.svg",
+          "glass": true,
+          "opacity": 0.8,
+          "position": {
+            "scale": 1,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "name": "petal3",
+          "image-name": "p3.svg",
+          "glass": true,
+          "opacity": 0.8,
+          "position": {
+            "scale": 1,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "name": "petal6",
+          "image-name": "p6.svg",
+          "glass": true,
+          "opacity": 0.8,
+          "position": {
+            "scale": 1,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "name": "petal9",
+          "image-name": "p9.svg",
+          "glass": true,
+          "opacity": 0.8,
+          "position": {
+            "scale": 1,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "name": "petal12",
+          "image-name": "p12.svg",
+          "glass": true,
+          "opacity": 0.8,
+          "position": {
+            "scale": 1,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Petals 2",
+      "lighting": "individual",
+      "specular": true,
+      "shadow": {
+        "kind": "layer-color",
+        "opacity": 0.6
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.2
+      },
+      "refractivity": {
+        "enabled": true,
+        "strength": 0.3,
+        "depth": 0.1
+      },
+      "layers": [
+        {
+          "name": "petal1",
+          "image-name": "p1.svg",
+          "glass": true,
+          "opacity": 0.8,
+          "position": {
+            "scale": 1,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "name": "petal4",
+          "image-name": "p4.svg",
+          "glass": true,
+          "opacity": 0.8,
+          "position": {
+            "scale": 1,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "name": "petal7",
+          "image-name": "p7.svg",
+          "glass": true,
+          "opacity": 0.8,
+          "position": {
+            "scale": 1,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "name": "petal10",
+          "image-name": "p10.svg",
+          "glass": true,
+          "opacity": 0.8,
+          "position": {
+            "scale": 1,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "name": "petal13",
+          "image-name": "p13.svg",
+          "glass": true,
+          "opacity": 0.8,
+          "position": {
+            "scale": 1,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Petals 3",
+      "lighting": "individual",
+      "specular": true,
+      "shadow": {
+        "kind": "layer-color",
+        "opacity": 0.6
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.2
+      },
+      "refractivity": {
+        "enabled": true,
+        "strength": 0.3,
+        "depth": 0.1
+      },
+      "layers": [
+        {
+          "name": "petal2",
+          "image-name": "p2.svg",
+          "glass": true,
+          "opacity": 0.8,
+          "position": {
+            "scale": 1,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "name": "petal5",
+          "image-name": "p5.svg",
+          "glass": true,
+          "opacity": 0.8,
+          "position": {
+            "scale": 1,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "name": "petal8",
+          "image-name": "p8.svg",
+          "glass": true,
+          "opacity": 0.8,
+          "position": {
+            "scale": 1,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "name": "petal11",
+          "image-name": "p11.svg",
+          "glass": true,
+          "opacity": 0.8,
+          "position": {
+            "scale": 1,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "supported-platforms": {
+    "squares": "shared",
+    "circles": [
+      "watchOS"
+    ]
+  }
+}
