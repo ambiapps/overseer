@@ -20,13 +20,15 @@ struct ContentView: View {
                 } actions: {
                     BoardPicker().labelsHidden().fixedSize()
                 }
+            } else if store.isSearching {
+                SearchResultsView()
             } else {
                 BoardView()
             }
         }
             .navigationTitle(store.board?.title ?? "Overseer")
             .navigationSubtitle(subtitle)
-            .searchable(text: $store.searchText, placement: .toolbar, prompt: "Filter tickets")
+            .searchable(text: $store.searchText, placement: .toolbar, prompt: "Search all tickets")
             .inspector(isPresented: inspectorShown) {
                 Group {
                     if let ticket = store.selectedTicket {
@@ -180,6 +182,49 @@ struct BoardView: View {
     private func columnWidth(for width: CGFloat) -> CGFloat {
         let count = CGFloat(columns.count)
         return max(250, (width - 24 - 12 * (count - 1)) / count)
+    }
+}
+
+/// Every ticket on the board matching the search, whatever its status, grouped by status.
+struct SearchResultsView: View {
+    @Environment(Store.self) private var store
+
+    var body: some View {
+        let groups = store.searchResults
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 8, pinnedViews: .sectionHeaders) {
+                ForEach(groups, id: \.status) { group in
+                    Section {
+                        ForEach(group.tickets) { ticket in
+                            TicketCard(ticket: ticket, status: group.status, isSelected: store.selection == ticket.id)
+                                .onTapGesture { store.selection = store.selection == ticket.id ? nil : ticket.id }
+                        }
+                    } header: {
+                        HStack(spacing: 6) {
+                            Image(systemName: group.status.symbol).foregroundStyle(group.status.tint)
+                            Text(group.status.rawValue).font(.headline)
+                            Text("\(group.tickets.count)")
+                                .font(.caption.weight(.medium).monospacedDigit())
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 6).padding(.vertical, 1)
+                                .background(.quaternary, in: Capsule())
+                            Spacer()
+                        }
+                        .padding(.vertical, 6)
+                        .background(.background.secondary)
+                    }
+                }
+            }
+            .frame(maxWidth: 720)
+            .padding(16)
+            .frame(maxWidth: .infinity)
+        }
+        .background(.background.secondary)
+        .overlay {
+            if groups.isEmpty {
+                ContentUnavailableView.search(text: store.searchText)
+            }
+        }
     }
 }
 

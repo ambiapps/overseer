@@ -8,6 +8,7 @@ import SwiftUI
 /// - With `OVERSEER_SNAPSHOT_UPDATE=/path/update.png` too, it writes the update window instead.
 /// - With `OVERSEER_SNAPSHOT_SIGNIN=/path/signin.png` too, it writes the sign-in sheet with a made-up code.
 /// - `OVERSEER_APPEARANCE=dark|light` picks the appearance.
+/// - `OVERSEER_SEARCH=<text>` types that into the GitHub board's search box first.
 /// - `OVERSEER_LINEAR_DEMO=1` shows the Linear board filled with made-up issues instead, and
 ///   `OVERSEER_SELECT=1` with it writes the first started issue's detail view (and the window
 ///   with it open to `/path/board-window.png`), and
@@ -94,6 +95,7 @@ enum Snapshot {
             return
         }
         source.wrappedValue = .github
+        if let search = env["OVERSEER_SEARCH"] { store.searchText = search }
         store.start()
         Task { @MainActor in
             while store.lastRefresh == nil { try? await Task.sleep(for: .milliseconds(200)) }

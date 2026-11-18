@@ -110,10 +110,27 @@ final class Store {
     }
 
     private var filteredTickets: [Ticket] {
-        let text = searchText.trimmingCharacters(in: .whitespaces).lowercased()
-        return boardTickets.filter { ticket in
-            (repoFilter == nil || ticket.repoNameWithOwner == repoFilter) &&
-                (text.isEmpty || ticket.title.lowercased().contains(text) || ticket.key.lowercased().contains(text))
+        boardTickets.filter { repoFilter == nil || $0.repoNameWithOwner == repoFilter }
+    }
+
+    private var trimmedSearch: String {
+        searchText.trimmingCharacters(in: .whitespaces)
+    }
+
+    /// Searching swaps the board for results from every ticket on it, Done and In Progress included.
+    var isSearching: Bool { !trimmedSearch.isEmpty }
+
+    /// Tickets whose title, key or description match the search, grouped by status in board order.
+    var searchResults: [(status: TicketStatus, tickets: [Ticket])] {
+        let text = trimmedSearch
+        guard !text.isEmpty else { return [] }
+        let matches = filteredTickets.filter {
+            $0.title.localizedStandardContains(text) || $0.key.localizedStandardContains(text) || $0.body.localizedStandardContains(text)
+        }
+        let grouped = Dictionary(grouping: matches) { status(of: $0) }
+        return TicketStatus.allCases.compactMap { status in
+            guard let tickets = grouped[status] else { return nil }
+            return (status, tickets.sorted { $0.updatedAt > $1.updatedAt })
         }
     }
 
