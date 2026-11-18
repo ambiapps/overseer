@@ -28,6 +28,7 @@ final class LinearStore {
     var searchText = ""
     var isLoading = false
     var error: String?
+    var notice: String?
     var lastRefresh: Date?
     var detail: LinearIssue?
     var detailComments: [LinearComment] = []
@@ -47,7 +48,9 @@ final class LinearStore {
     private var pollTask: Task<Void, Never>?
 
     init() {
-        teamID = UserDefaults.standard.string(forKey: Self.teamKey)
+        // The backing storage: through the setter, `didSet` would start a refresh before
+        // `start()` (or a debug snapshot's demo data) is ready for one.
+        _teamID = UserDefaults.standard.string(forKey: Self.teamKey)
     }
 
     var team: LinearTeam? { teams.first { $0.id == teamID } }
@@ -169,6 +172,29 @@ final class LinearStore {
 
     func comment(on issueID: LinearIssue.ID, body: String) async {
         await mutate(issueID) { try await $0.comment(issue: issueID, body: body) }
+    }
+
+    /// The state a new ticket starts in: the team's first Todo-type state, else its first open one.
+    var defaultNewState: LinearState? {
+        states.first { $0.type == "unstarted" } ?? states.first { !$0.isClosed }
+    }
+
+    var canCreate: Bool { hasKey && team != nil && defaultNewState != nil }
+
+    /// Files a ticket in the current team and selects it. Returns whether it was created.
+    func createIssue(title: String, description: String, state: LinearState, priority: Int) async -> Bool {
+        do {
+            guard let teamID else { throw LinearError.graphQL("No team is selected.") }
+            let issue = try await authorizedClient().createIssue(
+                team: teamID, title: title, description: description, state: state.id, priority: priority)
+            if teamID == self.teamID, !issues.contains(where: { $0.id == issue.id }) { issues.append(issue) }
+            selection = issue.id
+            notice = "Filed \(issue.identifier) in \(state.name)."
+            return true
+        } catch {
+            self.error = error.localizedDescription
+            return false
+        }
     }
 
     private func mutate(_ issueID: LinearIssue.ID, _ work: (LinearClient) async throws -> Void) async {

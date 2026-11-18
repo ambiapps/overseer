@@ -66,4 +66,13 @@ struct LinearStoreTests {
             state: .init(id: "done"), assignee: nil, creator: nil, labels: .init(nodes: [])))
         #expect(!store.issues(in: done).contains { $0.id == "old" })
     }
+
+    @Test func newTicketsStartInTodo() {
+        let store = LinearStore()
+        store.fillWithDemo()
+        #expect(store.defaultNewState?.id == "todo")
+        #expect(store.canCreate)
+        store.states.removeAll { $0.type == "unstarted" }
+        #expect(store.defaultNewState?.id == "backlog")
+    }
 }

@@ -4,6 +4,7 @@ import SwiftUI
 struct LinearContentView: View {
     @Environment(LinearStore.self) private var store
     @Binding var source: BoardSource
+    @Binding var showingNewTicket: Bool
     @AppStorage("showBacklog") private var showBacklog = true
 
     var body: some View {
@@ -70,12 +71,30 @@ struct LinearContentView: View {
                     }
                 }
                 .help("Refresh (⌘R)")
+
+                Button {
+                    showingNewTicket = true
+                } label: {
+                    Label("New Ticket", systemImage: "square.and.pencil")
+                }
+                .disabled(!store.canCreate)
+                .help("New Ticket (⌘N)")
             }
+        }
+        .sheet(isPresented: $showingNewTicket) {
+            LinearNewTicketView()
         }
         .overlay(alignment: .bottom) {
             if let error = store.error {
                 ErrorBanner(message: error, isError: true) { store.error = nil }
                     .padding()
+            } else if let notice = store.notice {
+                ErrorBanner(message: notice, isError: false) { store.notice = nil }
+                    .padding()
+                    .task(id: notice) {
+                        try? await Task.sleep(for: .seconds(5))
+                        if store.notice == notice { store.notice = nil }
+                    }
             }
         }
     }

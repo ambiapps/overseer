@@ -25,7 +25,7 @@ struct OverseerApp: App {
             Group {
                 switch source {
                 case .github: ContentView(showingNewTicket: $showingNewTicket, source: $source)
-                case .linear: LinearContentView(source: $source)
+                case .linear: LinearContentView(source: $source, showingNewTicket: $showingNewTicket)
                 }
             }
             .environment(store)
@@ -55,7 +55,7 @@ struct OverseerApp: App {
             CommandGroup(replacing: .newItem) {
                 Button("New Ticket…") { showingNewTicket = true }
                     .keyboardShortcut("n")
-                    .disabled(source != .github)
+                    .disabled(source == .linear ? !linear.canCreate : store.board == nil)
             }
             CommandGroup(after: .toolbar) {
                 Button("Refresh") {

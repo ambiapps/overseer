@@ -220,6 +220,25 @@ nonisolated struct LinearClient: Sendable {
         else { throw LinearError.graphQL("Linear didn't move the issue.") }
     }
 
+    /// Files a new issue in `team`, in workflow state `state`. Priority is 0 (none) to 4 (low).
+    func createIssue(team: String, title: String, description: String, state: String, priority: Int) async throws -> LinearIssue {
+        struct Response: Decodable { let issueCreate: Created }
+        struct Created: Decodable { let success: Bool; let issue: LinearIssue? }
+        let query = """
+        mutation($team: String!, $title: String!, $description: String, $state: String!, $priority: Int!) {
+          issueCreate(input: { teamId: $team, title: $title, description: $description, stateId: $state, priority: $priority }) {
+            success
+            issue { \(Self.issueFields) }
+          }
+        }
+        """
+        var variables: [String: Any] = ["team": team, "title": title, "state": state, "priority": priority]
+        if !description.isEmpty { variables["description"] = description }
+        let created = try await graphQL(query, variables: variables, as: Response.self).issueCreate
+        guard created.success, let issue = created.issue else { throw LinearError.graphQL("Linear didn't create the issue.") }
+        return issue
+    }
+
     func comment(issue: String, body: String) async throws {
         struct Response: Decodable { let commentCreate: Success }
         let query = """
