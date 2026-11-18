@@ -265,7 +265,7 @@ struct TicketCard: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 4) {
                 if let author = ticket.author {
-                    AvatarView(user: author, size: 16)
+                    AvatarView(name: author.login, url: author.avatarURL)
                 }
                 Text(ticket.key)
                     .font(.caption.monospacedDigit())
@@ -313,16 +313,17 @@ struct TicketCard: View {
     }
 }
 
-/// A GitHub user's avatar, falling back to their initial while it loads or when there is none.
+/// The avatar of whoever opened a ticket, falling back to their initial while it loads or when there is none.
 struct AvatarView: View {
-    let user: User
+    let name: String
+    let url: URL?
     var size: CGFloat = 16
 
     var body: some View {
         AsyncImage(url: avatarURL) { image in
             image.resizable().scaledToFill()
         } placeholder: {
-            Text(user.login.prefix(1).uppercased())
+            Text(name.prefix(1).uppercased())
                 .font(.system(size: size * 0.55, weight: .semibold))
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -331,13 +332,14 @@ struct AvatarView: View {
         .frame(width: size, height: size)
         .clipShape(Circle())
         .overlay { Circle().strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5) }
-        .help("Opened by \(user.login)")
-        .accessibilityLabel("Opened by \(user.login)")
+        .help("Opened by \(name)")
+        .accessibilityLabel("Opened by \(name)")
     }
 
-    /// Asks GitHub for an image sized for the display, not the full-size original.
+    /// Asks GitHub for an image sized for the display, not the full-size original. Other hosts get the URL as is.
     private var avatarURL: URL? {
-        guard let url = user.avatarURL, var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
+        guard let url, url.host()?.hasSuffix("githubusercontent.com") == true else { return url }
+        guard var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
         parts.queryItems = (parts.queryItems ?? []).filter { $0.name != "s" } + [URLQueryItem(name: "s", value: "\(Int(size * 3))")]
         return parts.url ?? url
     }
