@@ -10,6 +10,7 @@ struct NewTicketView: View {
     @State private var details = ""
     @State private var toDo = true
     @State private var submitting = false
+    @State private var uploadError: String?
     @FocusState private var titleFocused: Bool
 
     private static let template = """
@@ -26,6 +27,7 @@ struct NewTicketView: View {
     private var repo: Repo? { store.repo(named: repoName) }
     private var canSubmit: Bool {
         repo != nil && !title.trimmingCharacters(in: .whitespaces).isEmpty && !submitting
+            && !Attachment.isUploading(details)
     }
 
     var body: some View {
@@ -42,13 +44,11 @@ struct NewTicketView: View {
             }
 
             Text("Description").font(.callout).foregroundStyle(.secondary)
-            TextEditor(text: $details)
-                .font(.body.monospaced())
+            AttachmentEditor(text: $details, upload: { attachment in
+                guard let repo else { throw GitHubError.graphQL("Choose a repository before attaching files.") }
+                return try await store.upload(attachment, repo: repo.nameWithOwner)
+            }, onError: { uploadError = $0 })
                 .frame(minHeight: 260)
-                .scrollContentBackground(.hidden)
-                .padding(6)
-                .background(.background, in: RoundedRectangle(cornerRadius: 6))
-                .overlay(RoundedRectangle(cornerRadius: 6).stroke(.separator))
 
             Picker("Put in", selection: $toDo) {
                 Text("To Do: agents pick it up now").tag(true)
@@ -57,6 +57,10 @@ struct NewTicketView: View {
             .pickerStyle(.radioGroup)
 
             HStack {
+                if let uploadError {
+                    Label(uploadError, systemImage: "exclamationmark.triangle.fill")
+                        .font(.callout).foregroundStyle(.red).lineLimit(2)
+                }
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button(toDo ? "File in To Do" : "File in Backlog") {

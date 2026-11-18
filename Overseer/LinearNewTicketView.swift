@@ -10,6 +10,7 @@ struct LinearNewTicketView: View {
     @State private var stateID = ""
     @State private var priority = 0
     @State private var submitting = false
+    @State private var uploadError: String?
     @FocusState private var titleFocused: Bool
 
     private static let template = """
@@ -30,6 +31,7 @@ struct LinearNewTicketView: View {
     private var state: LinearState? { store.states.first { $0.id == stateID } }
     private var canSubmit: Bool {
         store.team != nil && state != nil && !title.trimmingCharacters(in: .whitespaces).isEmpty && !submitting
+            && !Attachment.isUploading(details)
     }
 
     var body: some View {
@@ -57,15 +59,15 @@ struct LinearNewTicketView: View {
             }
 
             Text("Description").font(.callout).foregroundStyle(.secondary)
-            TextEditor(text: $details)
-                .font(.body.monospaced())
+            AttachmentEditor(text: $details, upload: { try await store.upload($0) },
+                             onError: { uploadError = $0 })
                 .frame(minHeight: 260)
-                .scrollContentBackground(.hidden)
-                .padding(6)
-                .background(.background, in: RoundedRectangle(cornerRadius: 6))
-                .overlay(RoundedRectangle(cornerRadius: 6).stroke(.separator))
 
             HStack {
+                if let uploadError {
+                    Label(uploadError, systemImage: "exclamationmark.triangle.fill")
+                        .font(.callout).foregroundStyle(.red).lineLimit(2)
+                }
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button(state.map { "File in \($0.name)" } ?? "File Ticket") { submit() }

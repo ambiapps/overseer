@@ -314,6 +314,7 @@ struct LinearIssueDetailView: View {
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .environment(\.imageFetcher) { [store] in try await store.download($0) }
         .navigationTitle(issue.identifier)
         .toolbar {
             Button { openURL(issue.url) } label: { Label("Open in Linear", systemImage: "safari") }
@@ -394,18 +395,9 @@ struct LinearIssueDetailView: View {
 
     private var replyBox: some View {
         VStack(alignment: .trailing, spacing: 8) {
-            TextEditor(text: $reply)
-                .font(.body)
+            AttachmentEditor(text: $reply, font: .systemFont(ofSize: NSFont.systemFontSize), placeholder: "Add a comment…",
+                             upload: { try await store.upload($0) }, onError: { store.error = $0 })
                 .frame(minHeight: 70)
-                .scrollContentBackground(.hidden)
-                .padding(6)
-                .background(.background, in: RoundedRectangle(cornerRadius: 6))
-                .overlay(RoundedRectangle(cornerRadius: 6).stroke(.separator))
-                .overlay(alignment: .topLeading) {
-                    if reply.isEmpty {
-                        Text("Add a comment…").foregroundStyle(.tertiary).padding(11).allowsHitTesting(false)
-                    }
-                }
             Button("Comment") {
                 let body = reply
                 act {
@@ -413,7 +405,7 @@ struct LinearIssueDetailView: View {
                     reply = ""
                 }
             }
-            .disabled(reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || busy)
+            .disabled(reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || busy || Attachment.isUploading(reply))
         }
     }
 

@@ -240,6 +240,45 @@ nonisolated struct LinearClient: Sendable {
         return issue
     }
 
+    /// Uploads a file to Linear's storage and returns its asset URL, for use in Markdown.
+    func upload(_ attachment: Attachment) async throws -> URL {
+        struct Response: Decodable { let fileUpload: Payload }
+        struct Payload: Decodable { let success: Bool; let uploadFile: File? }
+        struct File: Decodable { let uploadUrl: URL; let assetUrl: URL; let headers: [Header] }
+        struct Header: Decodable { let key: String; let value: String }
+        let query = """
+        mutation($type: String!, $name: String!, $size: Int!) {
+          fileUpload(contentType: $type, filename: $name, size: $size) {
+            success
+            uploadFile { uploadUrl assetUrl headers { key value } }
+          }
+        }
+        """
+        let variables: [String: Any] = ["type": attachment.mimeType, "name": attachment.filename, "size": attachment.data.count]
+        let payload = try await graphQL(query, variables: variables, as: Response.self).fileUpload
+        guard payload.success, let file = payload.uploadFile else { throw LinearError.graphQL("Linear didn't accept the upload.") }
+
+        var request = URLRequest(url: file.uploadUrl)
+        request.httpMethod = "PUT"
+        request.setValue(attachment.mimeType, forHTTPHeaderField: "Content-Type")
+        request.setValue("public, max-age=31536000", forHTTPHeaderField: "Cache-Control")
+        for header in file.headers { request.setValue(header.value, forHTTPHeaderField: header.key) }
+        let (data, response) = try await URLSession.shared.upload(for: request, from: attachment.data)
+        let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(code) else { throw LinearError.http(code, String(decoding: data, as: UTF8.self)) }
+        return file.assetUrl
+    }
+
+    /// Downloads a file Linear stores, which needs the API key unless the workspace made uploads public.
+    func download(_ url: URL) async throws -> Data {
+        var request = URLRequest(url: url)
+        if url.host() == "uploads.linear.app" { request.setValue(key, forHTTPHeaderField: "Authorization") }
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(code) else { throw LinearError.http(code, "") }
+        return data
+    }
+
     func comment(issue: String, body: String) async throws {
         struct Response: Decodable { let commentCreate: Success }
         let query = """

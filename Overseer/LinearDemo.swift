@@ -1,5 +1,5 @@
 #if DEBUG
-import Foundation
+import AppKit
 
 /// Made-up issues for debug snapshots, so screenshots never show a real workspace.
 extension LinearStore {
@@ -47,10 +47,17 @@ extension LinearStore {
         lastRefresh = now
     }
 
+    /// What every demo image loads as: the app icon.
+    static var demoImage: Data {
+        let icon = NSApplication.shared.applicationIconImage!
+        let rep = NSBitmapImageRep(data: icon.tiffRepresentation!)!
+        return rep.representation(using: .png, properties: [:])!
+    }
+
     static let demoComments = [
         LinearComment(id: "c1", body: "Started on this — the drop target highlights the column now.",
                       createdAt: .now.addingTimeInterval(-7200), user: LinearPerson(name: "Alex", displayName: "Alex"), botActor: nil),
-        LinearComment(id: "c2", body: "Looks great. Can we also show the card while it's dragged?",
+        LinearComment(id: "c2", body: "Looks great. Can we also show the card while it's dragged?\n\n![Pasted image.png](https://uploads.linear.app/demo/pasted-image.png)",
                       createdAt: .now.addingTimeInterval(-3600), user: LinearPerson(name: "Sam", displayName: "Sam"), botActor: nil),
     ]
 }

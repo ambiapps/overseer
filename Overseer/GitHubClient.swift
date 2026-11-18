@@ -245,6 +245,79 @@ struct GitHubClient: Sendable {
         _ = try await rest("POST", "/repos/\(repo)/issues/\(number)/comments", body: ["body": body])
     }
 
+    // MARK: Attachments
+
+    /// GitHub has no API for issue attachments, so files go on an orphan branch in the issue's repo
+    /// and the issue links to them there. Only people who can see the repo can see them.
+    static let attachmentsBranch = "overseer-attachments"
+
+    /// Commits `attachment` to the attachments branch of `repo` and returns a URL that renders in issues.
+    func upload(_ attachment: Attachment, repo: String) async throws -> URL {
+        let safe = attachment.filename.map { $0.isLetter || $0.isNumber || $0 == "." || $0 == "-" || $0 == "_" ? $0 : "-" }
+        let path = "\(Date().formatted(.iso8601.year().month()))/\(UUID().uuidString.prefix(8))-\(String(safe))"
+        let body: [String: Any] = [
+            "message": "Attach \(attachment.filename)",
+            "content": attachment.data.base64EncodedString(),
+            "branch": Self.attachmentsBranch,
+        ]
+        do {
+            _ = try await rest("PUT", "/repos/\(repo)/contents/\(path)", body: body)
+        } catch GitHubError.http(let code, _) where code == 404 || code == 422 {
+            // The branch doesn't exist yet.
+            try await createAttachmentsBranch(repo: repo)
+            _ = try await rest("PUT", "/repos/\(repo)/contents/\(path)", body: body)
+        }
+        return URL(string: "https://github.com/\(repo)/blob/\(Self.attachmentsBranch)/\(path)?raw=true")!
+    }
+
+    /// Starts the attachments branch with no history, so it shares nothing with the code.
+    private func createAttachmentsBranch(repo: String) async throws {
+        struct SHA: Decodable { let sha: String }
+        let readme = "Files attached to issues from Overseer. Issues link here; don't delete this branch.\n"
+        let tree = try Self.decoder.decode(SHA.self, from: try await rest("POST", "/repos/\(repo)/git/trees", body: [
+            "tree": [["path": "README.md", "mode": "100644", "type": "blob", "content": readme]],
+        ]))
+        let commit = try Self.decoder.decode(SHA.self, from: try await rest("POST", "/repos/\(repo)/git/commits", body: [
+            "message": "Start attachments branch", "tree": tree.sha, "parents": [String](),
+        ]))
+        do {
+            _ = try await rest("POST", "/repos/\(repo)/git/refs", body: ["ref": "refs/heads/\(Self.attachmentsBranch)", "sha": commit.sha])
+        } catch GitHubError.http(422, let message) where message.contains("already exists") {
+            // Another upload made it first.
+        }
+    }
+
+    /// Fetches a file for display. Links to the attachments branch go through the API, since github.com
+    /// only serves private files to a signed-in browser.
+    func download(_ url: URL) async throws -> Data {
+        let parts = url.pathComponents
+        if url.host() == "github.com", parts.count > 5, parts[3] == "blob" || parts[3] == "raw" {
+            let repo = "\(parts[1])/\(parts[2])"
+            let path = parts[5...].map { $0.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? $0 }.joined(separator: "/")
+            var request = URLRequest(url: URL(string: "https://api.github.com/repos/\(repo)/contents/\(path)?ref=\(parts[4])")!)
+            request.setValue("application/vnd.github.raw", forHTTPHeaderField: "Accept")
+            return try await sendRaw(request)
+        }
+        var request = URLRequest(url: url)
+        if url.host() == "github.com" || url.host()?.hasSuffix("githubusercontent.com") == true {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(code) else { throw GitHubError.http(code, "") }
+        return data
+    }
+
+    private func sendRaw(_ request: URLRequest) async throws -> Data {
+        var request = request
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("Overseer", forHTTPHeaderField: "User-Agent")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(code) else { throw GitHubError.http(code, String(decoding: data, as: UTF8.self)) }
+        return data
+    }
+
     // MARK: GraphQL shapes
 
     static let issueFields = """
