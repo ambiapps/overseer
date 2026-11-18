@@ -4,7 +4,6 @@ struct ContentView: View {
     @Environment(Store.self) private var store
     @Binding var showingNewTicket: Bool
     @Binding var source: BoardSource
-    @AppStorage("showBacklog") private var showBacklog = true
 
     var body: some View {
         @Bindable var store = store
@@ -22,7 +21,7 @@ struct ContentView: View {
                     BoardPicker().labelsHidden().fixedSize()
                 }
             } else {
-                BoardView(showBacklog: showBacklog)
+                BoardView()
             }
         }
             .navigationTitle(store.board?.title ?? "Overseer")
@@ -62,11 +61,6 @@ struct ContentView: View {
                 }
                 }
                 ToolbarItemGroup(placement: .primaryAction) {
-                    Toggle(isOn: $showBacklog) {
-                        Label("Hold", systemImage: "pause.circle")
-                    }
-                    .help(showBacklog ? "Hide the Hold column" : "Show the Hold column")
-
                     Button {
                         Task { await store.refresh() }
                     } label: {
@@ -159,11 +153,7 @@ struct ErrorBanner: View {
 
 struct BoardView: View {
     @Environment(Store.self) private var store
-    let showBacklog: Bool
-
-    private var columns: [BoardColumn] {
-        BoardColumn.allCases.filter { showBacklog || $0 != .hold }
-    }
+    private var columns: [BoardColumn] { BoardColumn.allCases }
 
     var body: some View {
         GeometryReader { geometry in
@@ -274,6 +264,9 @@ struct TicketCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 4) {
+                if let author = ticket.author {
+                    AvatarView(user: author, size: 16)
+                }
                 Text(ticket.key)
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
@@ -317,5 +310,35 @@ struct TicketCard: View {
         }
         .shadow(color: .black.opacity(0.06), radius: 1, y: 1)
         .contentShape(RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+/// A GitHub user's avatar, falling back to their initial while it loads or when there is none.
+struct AvatarView: View {
+    let user: User
+    var size: CGFloat = 16
+
+    var body: some View {
+        AsyncImage(url: avatarURL) { image in
+            image.resizable().scaledToFill()
+        } placeholder: {
+            Text(user.login.prefix(1).uppercased())
+                .font(.system(size: size * 0.55, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(.quaternary)
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+        .overlay { Circle().strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5) }
+        .help("Opened by \(user.login)")
+        .accessibilityLabel("Opened by \(user.login)")
+    }
+
+    /// Asks GitHub for an image sized for the display, not the full-size original.
+    private var avatarURL: URL? {
+        guard let url = user.avatarURL, var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
+        parts.queryItems = (parts.queryItems ?? []).filter { $0.name != "s" } + [URLQueryItem(name: "s", value: "\(Int(size * 3))")]
+        return parts.url ?? url
     }
 }

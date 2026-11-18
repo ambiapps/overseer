@@ -4,24 +4,22 @@ import SwiftUI
 
 /// A column on the board, by what the agents are doing with a ticket. Done and closed tickets aren't shown.
 enum BoardColumn: String, CaseIterable, Identifiable {
-    case hold, todo, inProgress, needsClarification
+    case backlog, todo, needsClarification
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .hold: "Hold"
+        case .backlog: "Backlog"
         case .todo: "Todo"
-        case .inProgress: "In Progress"
         case .needsClarification: "Needs Clarification"
         }
     }
 
     var statuses: Set<TicketStatus> {
         switch self {
-        case .hold: [.backlog, .unfiled]
+        case .backlog: [.backlog, .unfiled]
         case .todo: [.todo]
-        case .inProgress: [.inProgress, .review]
         case .needsClarification: [.needsClarification]
         }
     }
@@ -29,27 +27,25 @@ enum BoardColumn: String, CaseIterable, Identifiable {
     /// Representative status for the column's symbol and tint.
     var status: TicketStatus {
         switch self {
-        case .hold: .backlog
+        case .backlog: .backlog
         case .todo: .todo
-        case .inProgress: .inProgress
         case .needsClarification: .needsClarification
         }
     }
 
-    /// The board Status a card dropped here gets. In Progress and Needs Clarification are the agents' to set.
+    /// The board Status a card dropped here gets. Needs Clarification is the agents' to set.
     var dropStatus: String? {
         switch self {
-        case .hold: Store.backlogStatus
+        case .backlog: Store.backlogStatus
         case .todo: Store.todoStatus
-        case .inProgress, .needsClarification: nil
+        case .needsClarification: nil
         }
     }
 
     var hint: String {
         switch self {
-        case .hold: "Not for the agents yet."
+        case .backlog: "Not for the agents yet."
         case .todo: "Dropping a ticket here hands it to the agents."
-        case .inProgress: "The agents are building or reviewing it."
         case .needsClarification: "The agent is blocked. Answer its question on the issue, then move it back to Todo."
         }
     }
