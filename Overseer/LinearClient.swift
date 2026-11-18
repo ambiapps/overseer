@@ -31,6 +31,7 @@ nonisolated struct LinearState: Identifiable, Hashable, Sendable, Decodable {
 nonisolated struct LinearPerson: Hashable, Sendable, Decodable {
     let name: String
     let displayName: String?
+    var avatarUrl: URL? = nil
 }
 
 nonisolated struct LinearLabel: Hashable, Sendable, Decodable {
@@ -157,7 +158,7 @@ nonisolated struct LinearClient: Sendable {
 
     static let issueFields = """
     id identifier title description url priority priorityLabel createdAt updatedAt
-    state { id } assignee { name displayName } creator { name displayName } labels { nodes { name color } }
+    state { id } assignee { name displayName } creator { name displayName avatarUrl } labels { nodes { name color } }
     """
 
     /// The team's open issues, plus closed ones updated since `closedSince`.

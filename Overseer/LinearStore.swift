@@ -127,16 +127,24 @@ final class LinearStore {
         defer { isLoading = false }
         do {
             let client = try authorizedClient()
-            if teams.isEmpty { teams = try await client.teams() }
+            if teams.isEmpty {
+                let loaded = try await client.teams()
+                guard !isDemo else { return } // a snapshot filled in demo data meanwhile
+                teams = loaded
+            }
             if team == nil, let first = teams.first {
                 teamID = first.id // refreshes again for the new team
                 return
             }
             guard let teamID else { return }
-            if states.isEmpty { states = try await client.states(team: teamID) }
+            if states.isEmpty {
+                let loaded = try await client.states(team: teamID)
+                guard !isDemo else { return }
+                states = loaded
+            }
             let since = Date.now.addingTimeInterval(-Double(Self.closedDays) * 86_400)
             let loaded = try await client.issues(team: teamID, closedSince: since)
-            guard teamID == self.teamID else { return }
+            guard teamID == self.teamID, !isDemo else { return }
             issues = loaded
             error = nil
             lastRefresh = .now
