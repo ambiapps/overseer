@@ -9,7 +9,8 @@ import SwiftUI
 /// - With `OVERSEER_SNAPSHOT_SIGNIN=/path/signin.png` too, it writes the sign-in sheet with a made-up code.
 /// - `OVERSEER_APPEARANCE=dark|light` picks the appearance.
 /// - `OVERSEER_LINEAR_DEMO=1` shows the Linear board filled with made-up issues instead, and
-///   `OVERSEER_SELECT=1` with it writes the first started issue's detail view.
+///   `OVERSEER_SELECT=1` with it writes the first started issue's detail view, and
+///   `OVERSEER_SNAPSHOT_NEWTICKET=/path/new.png` writes the New Linear Ticket sheet.
 /// - `OVERSEER_SELECT=<column>` also writes the first ticket of that column's detail view to
 ///   `/path/board-ticket.png`. The inspector pane can't be captured from inside the process, so
 ///   the same view is rendered in a window of the inspector's width.
@@ -66,6 +67,16 @@ enum Snapshot {
             Task { @MainActor in
                 guard let window = await mainWindow() else { return }
                 write(window.contentView?.superview ?? window.contentView!, to: path)
+                if let newTicketPath = env["OVERSEER_SNAPSHOT_NEWTICKET"] {
+                    let sheet = NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
+                    hide(sheet)
+                    sheet.contentViewController = NSHostingController(rootView: LinearNewTicketView()
+                        .environment(linear)
+                        .background(Color(nsColor: .windowBackgroundColor)))
+                    sheet.orderBack(nil)
+                    try? await Task.sleep(for: .seconds(1))
+                    write(sheet.contentView!, to: newTicketPath)
+                }
                 if env["OVERSEER_SELECT"] != nil,
                    let started = linear.states.first(where: { $0.type == "started" }),
                    let issue = linear.issues(in: started).first {
