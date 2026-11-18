@@ -4,7 +4,6 @@ import SwiftUI
 struct LinearContentView: View {
     @Environment(LinearStore.self) private var store
     @Binding var source: BoardSource
-    @AppStorage("showBacklog") private var showBacklog = true
 
     var body: some View {
         @Bindable var store = store
@@ -18,7 +17,7 @@ struct LinearContentView: View {
                     SettingsLink { Text("Open Settings…") }
                 }
             } else {
-                LinearBoardView(showBacklog: showBacklog)
+                LinearBoardView()
             }
         }
         .navigationTitle(store.team.map { "Linear · \($0.name)" } ?? "Linear")
@@ -55,11 +54,6 @@ struct LinearContentView: View {
                 .help("Show another team's board")
             }
             ToolbarItemGroup(placement: .primaryAction) {
-                Toggle(isOn: $showBacklog) {
-                    Label("Backlog", systemImage: "archivebox")
-                }
-                .help(showBacklog ? "Hide the backlog columns" : "Show the backlog columns")
-
                 Button {
                     Task { await store.refresh() }
                 } label: {
@@ -107,10 +101,11 @@ struct SourcePicker: View {
 
 struct LinearBoardView: View {
     @Environment(LinearStore.self) private var store
-    let showBacklog: Bool
+    /// Only the states the agents' work is handed over in, matched by name.
+    static let shownStates: Set<String> = ["backlog", "todo", "to do", "needs clarification"]
 
     private var columns: [LinearState] {
-        store.states.filter { showBacklog || ($0.type != "backlog" && $0.type != "triage") }
+        store.states.filter { Self.shownStates.contains($0.name.lowercased()) }
     }
 
     var body: some View {
@@ -202,6 +197,9 @@ struct LinearIssueCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 4) {
+                if let creator = issue.creator {
+                    AvatarView(name: creator.displayName ?? creator.name, url: creator.avatarUrl)
+                }
                 Text(issue.identifier)
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)

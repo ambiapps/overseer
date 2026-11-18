@@ -9,9 +9,10 @@ extension LinearStore {
         let states = [
             LinearState(id: "backlog", name: "Backlog", type: "backlog", position: 0, color: "#bec2c8"),
             LinearState(id: "todo", name: "Todo", type: "unstarted", position: 1, color: "#e2e2e2"),
-            LinearState(id: "progress", name: "In Progress", type: "started", position: 2, color: "#f2c94c"),
-            LinearState(id: "review", name: "In Review", type: "started", position: 3, color: "#0f9d58"),
-            LinearState(id: "done", name: "Done", type: "completed", position: 4, color: "#5e6ad2"),
+            LinearState(id: "clarify", name: "Needs clarification", type: "unstarted", position: 2, color: "#eb5757"),
+            LinearState(id: "progress", name: "In Progress", type: "started", position: 3, color: "#f2c94c"),
+            LinearState(id: "review", name: "In Review", type: "started", position: 4, color: "#0f9d58"),
+            LinearState(id: "done", name: "Done", type: "completed", position: 5, color: "#5e6ad2"),
         ]
         teamID = "team" // before the states: changing the team clears the board
         self.states = states
@@ -36,6 +37,7 @@ extension LinearStore {
             issue(52, "Redesign the settings window", "todo", priority: 2, hours: 5, assignee: "Alex", labels: [feature]),
             issue(53, "Date picker clips in dark mode", "todo", priority: 1, hours: 2, labels: [bug]),
             issue(49, "Icon set for ticket states", "todo", priority: 3, hours: 26, assignee: "Robin"),
+            issue(51, "Which export formats should the share sheet offer?", "clarify", priority: 2, hours: 6, labels: [feature]),
             issue(47, "Drag and drop between columns", "progress", priority: 2, hours: 1, assignee: "Alex", labels: [feature]),
             issue(50, "Tighten spacing in the inspector", "progress", priority: 3, hours: 3, assignee: "Robin", labels: [polish]),
             issue(45, "Comment composer supports Markdown", "review", priority: 2, hours: 4, assignee: "Sam", labels: [feature]),
