@@ -1,4 +1,5 @@
 import AppKit
+import AVKit
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -289,7 +290,7 @@ struct TicketImage: View {
                 Image(nsImage: image)
                     .resizable()
                     .scaledToFit()
-                    .frame(maxWidth: min(image.size.width, 560), alignment: .leading)
+                    .frame(maxWidth: min(image.size.width, 560), maxHeight: min(image.size.height, 480), alignment: .leading)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
                     .onTapGesture { openURL(url) }
                     .help(alt)
@@ -307,5 +308,136 @@ struct TicketImage: View {
                 failed = true
             }
         }
+    }
+}
+
+/// A file uploaded to a ticket and linked on a line of its own. Images show in place, videos
+/// play in place, and anything else opens in its default app. The tracker's sign-in is needed to
+/// fetch them, so links to them don't open in a browser that isn't signed in.
+struct TicketAttachment: View {
+    @Environment(\.imageFetcher) private var fetch
+    @Environment(\.openURL) private var openURL
+    let label: String
+    let url: URL
+
+    private enum Content {
+        case image(NSImage)
+        case video(AVPlayer, CGSize)
+        case file(URL)
+    }
+
+    @State private var content: Content?
+    @State private var loading = false
+    @State private var failed = false
+
+    /// Media is fetched up front; other files (a PDF, a zip) only when clicked.
+    private var isMedia: Bool {
+        let ext = (label as NSString).pathExtension.isEmpty ? url.pathExtension : (label as NSString).pathExtension
+        guard !ext.isEmpty, let type = UTType(filenameExtension: ext) else { return true }
+        return type.conforms(to: .image) || type.conforms(to: .audiovisualContent)
+    }
+
+    var body: some View {
+        Group {
+            switch content {
+            case .image(let image):
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: min(image.size.width, 560), maxHeight: min(image.size.height, 480), alignment: .leading)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .help(label)
+            case .video(let player, let size):
+                PlayerView(player: player)
+                    .aspectRatio(size.width / max(size.height, 1), contentMode: .fit)
+                    .frame(maxWidth: min(size.width, 560), maxHeight: 420, alignment: .leading)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .onDisappear { player.pause() }
+            case .file(let file):
+                chip { NSWorkspace.shared.open(file) }
+            case nil:
+                if isMedia && !failed {
+                    ProgressView().controlSize(.small).frame(height: 40)
+                } else {
+                    chip { Task { await load(open: true) } }
+                }
+            }
+        }
+        .task(id: url) { if isMedia { await load(open: false) } }
+    }
+
+    private func chip(_ action: @escaping () -> Void) -> some View {
+        Button(action: failed ? { openURL(url) } : action) {
+            Label(label.isEmpty ? url.lastPathComponent : label, systemImage: failed ? "exclamationmark.triangle" : "doc")
+        }
+        .buttonStyle(.link)
+        .disabled(loading)
+        .help(failed ? "Couldn't download this file. Click to open it in the browser." : "Open \(label)")
+    }
+
+    private func load(open: Bool) async {
+        loading = true
+        defer { loading = false }
+        do {
+            let data = try await fetch(url)
+            if let image = NSImage(data: data), image.isValid, !Self.isVideo(data) {
+                content = .image(image)
+                return
+            }
+            let file = try Self.save(data, named: label, from: url)
+            if Self.isVideo(data) || UTType(filenameExtension: file.pathExtension)?.conforms(to: .audiovisualContent) == true {
+                let asset = AVURLAsset(url: file)
+                var size = CGSize(width: 16, height: 9)
+                if let track = try? await asset.loadTracks(withMediaType: .video).first,
+                   let (natural, transform) = try? await track.load(.naturalSize, .preferredTransform) {
+                    let turned = natural.applying(transform)
+                    size = CGSize(width: abs(turned.width), height: abs(turned.height))
+                }
+                content = .video(AVPlayer(url: file), size)
+            } else {
+                content = .file(file)
+                if open { NSWorkspace.shared.open(file) }
+            }
+        } catch {
+            failed = true
+        }
+    }
+
+    /// MP4 and QuickTime files carry `ftyp` at byte 4; screen recordings uploaded without an
+    /// extension (GitHub's video links have none) are recognised this way.
+    static func isVideo(_ data: Data) -> Bool {
+        data.count > 12 && data[data.startIndex + 4 ..< data.startIndex + 8] == Data("ftyp".utf8)
+    }
+
+    /// Writes the download to a temporary file, named so other apps know what it is.
+    static func save(_ data: Data, named label: String, from url: URL) throws -> URL {
+        let folder = FileManager.default.temporaryDirectory
+            .appending(path: "Overseer Attachments/\(abs(url.absoluteString.hashValue))", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        var name = label.replacingOccurrences(of: "/", with: "-").trimmingCharacters(in: .whitespaces)
+        if name.isEmpty { name = url.lastPathComponent }
+        if (name as NSString).pathExtension.isEmpty || UTType(filenameExtension: (name as NSString).pathExtension) == nil {
+            name += isVideo(data) ? ".mp4" : ""
+        }
+        let file = folder.appending(path: name)
+        try data.write(to: file)
+        return file
+    }
+}
+
+/// AppKit's player with its inline controls. SwiftUI's `VideoPlayer` fails to load in this app.
+private struct PlayerView: NSViewRepresentable {
+    let player: AVPlayer
+
+    func makeNSView(context: Context) -> AVPlayerView {
+        let view = AVPlayerView()
+        view.player = player
+        view.controlsStyle = .inline
+        view.showsFullScreenToggleButton = true
+        return view
+    }
+
+    func updateNSView(_ view: AVPlayerView, context: Context) {
+        if view.player !== player { view.player = player }
     }
 }

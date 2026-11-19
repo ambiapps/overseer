@@ -16,6 +16,9 @@ import SwiftUI
 /// - `OVERSEER_SELECT=<column>` also writes the first ticket of that column's detail view to
 ///   `/path/board-ticket.png`. The inspector pane can't be captured from inside the process, so
 ///   the same view is rendered in a window of the inspector's width.
+/// - `OVERSEER_SNAPSHOT_MARKDOWN=/path/body.md` writes that Markdown as a ticket body, with its
+///   images fetched through the signed-in `OVERSEER_MARKDOWN_SOURCE=github|linear` account
+///   (or `OVERSEER_GITHUB_TOKEN`), or read from `OVERSEER_ASSET_DIR` by file name instead.
 enum Snapshot {
     static let isRequested = ProcessInfo.processInfo.environment["OVERSEER_SNAPSHOT"] != nil
 
@@ -59,6 +62,26 @@ enum Snapshot {
                 window.orderBack(nil)
                 try? await Task.sleep(for: .seconds(1))
                 write(window.contentView!, to: updatePath)
+                NSApp.terminate(nil)
+            }
+            return
+        }
+        if let markdownPath = env["OVERSEER_SNAPSHOT_MARKDOWN"] {
+            let markdown = (try? String(contentsOfFile: markdownPath, encoding: .utf8)) ?? ""
+            // A GitHub token in the environment skips the keychain, which prompts for a debug build.
+            let github = env["OVERSEER_GITHUB_TOKEN"].map { GitHubClient(token: $0) }
+            let useLinear = env["OVERSEER_MARKDOWN_SOURCE"] == "linear"
+            // Or files from a folder, by the URL's last path component, to show made-up tickets.
+            let assets = env["OVERSEER_ASSET_DIR"].map { URL(fileURLWithPath: $0) }
+            let fetcher: ImageFetcher = { [store, linear] url in
+                if let assets { return try Data(contentsOf: assets.appending(path: url.lastPathComponent)) }
+                if useLinear { return try await linear.download(url) }
+                if let github { return try await github.download(url) }
+                return try await store.download(url)
+            }
+            Task { @MainActor in
+                await writeDetail(ScrollView { MarkdownText(markdown).padding(16) }
+                    .environment(\.imageFetcher, fetcher), to: path, height: 1400, settle: .seconds(8))
                 NSApp.terminate(nil)
             }
             return
@@ -136,13 +159,14 @@ enum Snapshot {
         return window
     }
 
-    private static func writeDetail(_ view: some View, to path: String) async {
-        let detail = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 460, height: 860),
+    private static func writeDetail(_ view: some View, to path: String, height: CGFloat = 860,
+                                    settle: Duration = .seconds(1.5)) async {
+        let detail = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 460, height: height),
                               styleMask: [.titled], backing: .buffered, defer: false)
         hide(detail)
         detail.contentView = NSHostingView(rootView: view.background(.background))
         detail.orderBack(nil)
-        try? await Task.sleep(for: .seconds(1.5))
+        try? await Task.sleep(for: settle)
         write(detail.contentView!, to: path.replacingOccurrences(of: ".png", with: "-ticket.png"))
     }
 

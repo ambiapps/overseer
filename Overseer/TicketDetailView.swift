@@ -275,7 +275,7 @@ struct MarkdownText: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+            ForEach(Array(Self.blocks(of: source).enumerated()), id: \.offset) { _, block in
                 switch block {
                 case .heading(let level, let text):
                     inline(text).font(level <= 1 ? .title3.bold() : level == 2 ? .headline : .subheadline.bold())
@@ -296,6 +296,8 @@ struct MarkdownText: View {
                     inline(text)
                 case .image(let alt, let url):
                     TicketImage(alt: alt, url: url)
+                case .attachment(let label, let url):
+                    TicketAttachment(label: label, url: url)
                 }
             }
         }
@@ -311,29 +313,81 @@ struct MarkdownText: View {
         return Text(text)
     }
 
-    private enum Block {
+    enum Block: Equatable {
         case heading(Int, String)
         case code(String)
         case bullet(Int, String, String)
         case paragraph(String)
         case image(String, URL)
+        /// A file uploaded to the tracker (often a screen recording) linked on a line of its own.
+        case attachment(String, URL)
     }
 
-    /// A line that is only an image: `![alt](url)` or GitHub's `<img src="url">`.
-    private static func image(in line: String) -> (String, URL)? {
-        if let match = line.wholeMatch(of: /!\[([^\]]*)\]\((\S+?)(?:\s+"[^"]*")?\)/),
-           let url = URL(string: String(match.2)), url.scheme?.hasPrefix("http") == true {
-            return (String(match.1), url)
+    /// `![alt](url)` or GitHub's `<img … src="url">`, anywhere in a line.
+    nonisolated(unsafe) private static let imagePattern =
+        /!\[(?<alt>[^\]]*)\]\((?<url>\S+?)(?:\s+"[^"]*")?\)|<img\b(?<tag>[^>]*)\/?>/
+
+    private static func webURL(_ text: Substring) -> URL? {
+        guard let url = URL(string: String(text)), url.scheme?.hasPrefix("http") == true else { return nil }
+        return url
+    }
+
+    /// Splits a line around the images in it. Images inline Markdown can't show (it drops them).
+    private static func split(_ line: String) -> [Either] {
+        var parts: [Either] = []
+        var rest = line[...]
+        while let match = rest.firstMatch(of: imagePattern) {
+            let before = rest[..<match.range.lowerBound]
+            if let tag = match.output.tag {
+                guard let src = tag.firstMatch(of: /\bsrc="([^"]+)"/), let url = webURL(src.1) else {
+                    parts.append(.text(String(rest[..<match.range.upperBound])))
+                    rest = rest[match.range.upperBound...]
+                    continue
+                }
+                parts.append(.text(String(before)))
+                parts.append(.image(tag.firstMatch(of: /\balt="([^"]*)"/).map { String($0.1) } ?? "", url))
+            } else if let urlText = match.output.url, let url = webURL(urlText) {
+                parts.append(.text(String(before)))
+                parts.append(.image(String(match.output.alt ?? ""), url))
+            } else {
+                parts.append(.text(String(rest[..<match.range.upperBound])))
+            }
+            rest = rest[match.range.upperBound...]
         }
-        if let match = line.wholeMatch(of: /<img\b[^>]*\bsrc="([^"]+)"[^>]*\/?>/),
-           let url = URL(string: String(match.1)), url.scheme?.hasPrefix("http") == true {
-            let alt = line.firstMatch(of: /\balt="([^"]*)"/).map { String($0.1) } ?? ""
-            return (alt, url)
+        parts.append(.text(String(rest)))
+        return parts
+    }
+
+    private enum Either { case text(String), image(String, URL) }
+
+    /// Hosts that store files uploaded to a ticket; a link to one on its own line is shown in place.
+    static func isUpload(_ url: URL) -> Bool {
+        switch url.host() {
+        case "uploads.linear.app": true
+        case "github.com": url.path().hasPrefix("/user-attachments/")
+        case "private-user-images.githubusercontent.com", "user-images.githubusercontent.com": true
+        default: false
+        }
+    }
+
+    /// A line that is only an uploaded file: a bare URL (how GitHub embeds videos) or `[name](url)`.
+    private static func attachment(in line: String) -> (String, URL)? {
+        if let url = webURL(line[...]), isUpload(url), !line.contains(" ") {
+            return (url.lastPathComponent, url)
+        }
+        if let match = line.wholeMatch(of: /\[([^\]]*)\]\((\S+?)\)/), let url = webURL(match.2), isUpload(url) {
+            return (String(match.1), url)
         }
         return nil
     }
 
-    private var blocks: [Block] {
+    /// Leftovers around images that GitHub hides, such as `<p align="center">` or `</a>`.
+    private static func isOnlyTags(_ text: String) -> Bool {
+        text.replacingOccurrences(of: "<[^>]*>", with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    static func blocks(of source: String) -> [Block] {
         var result: [Block] = []
         var paragraph: [String] = []
         var code: [String]?
@@ -365,9 +419,24 @@ struct MarkdownText: View {
                 result.append(.heading(line.distance(from: line.startIndex, to: hashes), String(line[line.index(after: hashes)...])))
                 continue
             }
-            if let (alt, url) = Self.image(in: line) {
+            let parts = split(line)
+            if parts.count > 1 {
+                for part in parts {
+                    switch part {
+                    case .image(let alt, let url):
+                        flush()
+                        result.append(.image(alt, url))
+                    case .text(let text):
+                        let text = text.trimmingCharacters(in: .whitespaces)
+                        // A list marker left before an image (`- ![…](…)`) means nothing on its own.
+                        if !isOnlyTags(text), text.wholeMatch(of: /[-*]|\d+\./) == nil { paragraph.append(text) }
+                    }
+                }
+                continue
+            }
+            if let (label, url) = attachment(in: line) {
                 flush()
-                result.append(.image(alt, url))
+                result.append(.attachment(label, url))
                 continue
             }
             let indent = raw.prefix { $0 == " " }.count / 2
